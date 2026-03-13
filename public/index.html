@@ -39,7 +39,7 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; -webkit-font-smoothing: antialiased; }
-body { font-family: var(--font-sans); color: var(--text-1); background: var(--bg-canvas); min-height: 100vh; overflow: hidden; }
+body { font-family: var(--font-sans); color: var(--text-1); background: var(--bg-canvas); height: 100vh; height: 100dvh; overflow: hidden; margin: 0; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 9px; }
@@ -770,6 +770,26 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 // ═══════════════════════════════════════════════
 // Bookworm Frontend — Multi-LLM BYOK Chat
 // ═══════════════════════════════════════════════
+
+// ── Windows 任务栏安全边距 ──
+// 浏览器最大化时 bottom:0 会延伸到任务栏后面，需要检测并补偿
+!function(){
+  var app = null;
+  function fix(){
+    if (!app) app = document.querySelector('.app');
+    if (!app) return;
+    // 任务栏高度 = 屏幕总高 - 可用高度
+    var taskbarH = screen.height - screen.availHeight;
+    // 判断是否最大化: 窗口外高度接近屏幕高度
+    var isMax = window.outerHeight >= screen.availHeight - 10;
+    app.style.bottom = (isMax && taskbarH > 0) ? taskbarH + 'px' : '0';
+  }
+  // DOM ready 后执行
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fix);
+  } else { fix(); }
+  window.addEventListener('resize', fix);
+}();
 
 const API = location.origin;
 let token = localStorage.getItem('bw_token') || '';

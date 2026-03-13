@@ -8,6 +8,10 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 
+// ─── 独立 Agent: 禁用 keepAlive 防止 socket 复用导致假超时 ───
+const httpsAgent = new https.Agent({ keepAlive: false });
+const httpAgent = new http.Agent({ keepAlive: false });
+
 // ─── Provider 配置 ───
 const PROVIDERS = {
   anthropic: {
@@ -134,6 +138,7 @@ function listProviders() {
 
 /**
  * 通用 LLM 请求发送
+ * 修复: 禁用 socket 复用 + 分离连接/读取超时 + 详细错误日志
  */
 function sendLLMRequest(provider, apiKey, body, res, stream) {
   const config = PROVIDERS[provider.name || provider] || PROVIDERS.anthropic;
@@ -164,11 +169,20 @@ function sendLLMRequest(provider, apiKey, body, res, stream) {
     path: url.pathname,
     method: 'POST',
     headers,
+    // 关键修复: 禁用 socket 复用，防止 Node 20 keepAlive 导致假超时
+    agent: isHttps ? httpsAgent : httpAgent,
+    // 连接超时 15s (DNS + TCP + TLS)
+    timeout: 15_000,
   };
+
+  const startMs = Date.now();
 
   return new Promise((resolve, reject) => {
     const transport = isHttps ? https : http;
     const proxyReq = transport.request(requestOpts, (proxyRes) => {
+      // 连接成功后切换为读取超时 120s
+      proxyReq.setTimeout(120_000);
+
       if (stream) {
         if (proxyRes.statusCode !== 200) {
           const chunks = [];
@@ -204,10 +218,20 @@ function sendLLMRequest(provider, apiKey, body, res, stream) {
       }
     });
 
-    proxyReq.on('error', reject);
-    proxyReq.setTimeout(120_000, () => {
-      proxyReq.destroy(new Error('LLM API 请求超时 (120s)'));
+    proxyReq.on('error', (err) => {
+      const elapsed = Date.now() - startMs;
+      // 增强错误信息: 附带实际耗时和原始错误
+      err.message = `LLM 请求失败 [${elapsed}ms]: ${err.message}`;
+      reject(err);
     });
+
+    // 连接阶段超时 (timeout 选项已处理)
+    // 连接成功后的读取超时在 response 回调中设置
+    proxyReq.on('timeout', () => {
+      const elapsed = Date.now() - startMs;
+      proxyReq.destroy(new Error(`LLM API 超时 [${elapsed}ms elapsed, limit=${elapsed < 20000 ? '15s connect' : '120s read'}]`));
+    });
+
     proxyReq.write(payload);
     proxyReq.end();
   });
