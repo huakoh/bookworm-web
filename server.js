@@ -33,6 +33,8 @@ const { handleUpgrade } = require('./src/ws-handler');
 const { detectProvider, getProviderConfig, sendLLMRequest, PROVIDERS } = require('./src/llm-router');
 const fileManager = require('./src/file-manager');
 const payment = require('./src/payment');
+const { startScheduler, stopScheduler } = require('./src/tier-scheduler');
+const inviteCodes = require('./src/invite-codes');
 
 // ─── 配置 ───
 const PORT = parseInt(process.env.PORT) || 3211;
@@ -744,6 +746,13 @@ routes['GET:/v1/admin/users'] = async (req, res) => {
 routes['GET:/v1/admin/stats'] = async (req, res) => {
   requireAdmin(req);
   const stats = getSystemStats();
+  const codeStats = inviteCodes.getCodeStats();
+
+  // 计算付费转化率 & MRR
+  const paidUsers = (stats.tierDistribution.pro || 0) + (stats.tierDistribution.team || 0);
+  const mrr = (stats.tierDistribution.pro || 0) * 29 + (stats.tierDistribution.team || 0) * 79;
+  const arpu = stats.totalUsers > 0 ? Math.round(mrr / stats.totalUsers * 100) / 100 : 0;
+
   json(res, 200, {
     ...stats,
     uptime: Math.floor((Date.now() - startTime) / 1000),
@@ -751,7 +760,57 @@ routes['GET:/v1/admin/stats'] = async (req, res) => {
       rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
       heap: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
     },
+    revenue: { paidUsers, conversionRate: stats.totalUsers > 0 ? Math.round(paidUsers / stats.totalUsers * 10000) / 100 + '%' : '0%', mrr, arpu },
+    inviteCodes: codeStats,
   });
+};
+
+// ─── 邀请码管理 (管理员) ───
+
+routes['POST:/v1/admin/codes'] = async (req, res) => {
+  requireAdmin(req);
+  const body = await parseJsonBody(req);
+  const code = inviteCodes.createCode(body);
+  log('info', '邀请码创建', { code: code.code, type: code.type });
+  json(res, 200, { ok: true, code });
+};
+
+routes['GET:/v1/admin/codes'] = async (req, res) => {
+  requireAdmin(req);
+  const codes = inviteCodes.listCodes();
+  json(res, 200, { ok: true, count: codes.length, codes });
+};
+
+routes['DELETE:/v1/admin/codes'] = async (req, res) => {
+  requireAdmin(req);
+  const body = await parseJsonBody(req);
+  if (!body.code) throw { status: 400, message: '缺少 code' };
+  const ok = inviteCodes.deactivateCode(body.code);
+  if (!ok) throw { status: 404, message: '邀请码不存在' };
+  json(res, 200, { ok: true });
+};
+
+// 用户兑换邀请码
+routes['POST:/v1/me/redeem'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const body = await parseJsonBody(req);
+  if (!body.code) throw { status: 400, message: '请输入邀请码' };
+
+  const result = inviteCodes.redeemCode(body.code, userId);
+  if (!result.valid) throw { status: 400, message: result.error };
+
+  const code = result.code;
+  let message = '邀请码兑换成功';
+
+  // 赠送套餐
+  if (code.grantTier && code.grantDays > 0) {
+    const expiresAt = new Date(Date.now() + code.grantDays * 86400000).toISOString();
+    await updateUserTier(userId, code.grantTier, expiresAt);
+    message = `已激活 ${code.grantTier} 套餐 (${code.grantDays} 天)`;
+  }
+
+  log('info', '邀请码兑换', { userId, code: code.code, type: code.type });
+  json(res, 200, { ok: true, message, type: code.type, grantTier: code.grantTier, grantDays: code.grantDays, discountPct: code.discountPct });
 };
 
 // ─── 文件上传/下载 ───
@@ -932,6 +991,8 @@ server.listen(PORT, () => {
   ║  Admin: ${ADMIN_TOKEN ? 'configured' : 'not configured    '}              ║
   ╚══════════════════════════════════════════════╝
   `);
+  // 启动套餐到期自动降级调度器 (每小时检查)
+  startScheduler();
 });
 
 // ─── 优雅关闭 ───
@@ -945,6 +1006,7 @@ function gracefulShutdown(signal) {
   forceTimer.unref();
 
   server.close(() => {
+    stopScheduler();
     closeDb();
     limiter.destroy();
     loginGuard.destroy();

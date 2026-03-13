@@ -1083,6 +1083,35 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
               <button class="btn btn-secondary" onclick="loadPricing()">加载套餐</button>
             </div>
           </div>
+          <!-- 文件管理 -->
+          <div class="card" id="fileManagerCard" style="display:none">
+            <div class="card-title">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              文件管理
+              <span id="fileCount" style="margin-left:8px;font-size:12px;color:var(--text-3)"></span>
+            </div>
+            <div id="fileList" style="margin-top:8px"></div>
+          </div>
+          <!-- 邀请码兑换 -->
+          <div class="card">
+            <div class="card-title">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 010-4h12V0"/><path d="M4 6v12a2 2 0 002 2h14v-4"/><path d="M18 12l4 4-4 4"/></svg>
+              邀请码 / 优惠码
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <input class="form-input" id="redeemInput" placeholder="输入邀请码" style="flex:1;font-family:var(--font-mono);text-transform:uppercase">
+              <button class="btn btn-primary" onclick="redeemInviteCode()">兑换</button>
+            </div>
+            <div id="redeemResult" style="margin-top:8px;font-size:13px"></div>
+          </div>
+          <!-- 订单历史 -->
+          <div class="card" id="orderHistoryCard" style="display:none">
+            <div class="card-title">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              订单历史
+            </div>
+            <div id="orderList" style="margin-top:8px"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1547,8 +1576,15 @@ async function doChat() {
 
     if (!res.ok) {
       const err = await res.json();
-      contentEl.innerHTML = `<span style="color:var(--error)">[错误] ${err.error || err.detail?.error?.message || JSON.stringify(err)}</span>`;
-      chatHistory.pop(); // 移除 user 消息
+      if (res.status === 403 && err.error?.includes('升级套餐')) {
+        contentEl.innerHTML = `<div style="color:var(--warning);padding:12px;background:rgba(251,191,36,0.08);border-radius:var(--radius-md);border:1px solid rgba(251,191,36,0.2)">
+          <strong>配额已达上限</strong><br><span style="font-size:13px">${escapeHtml(err.error)}</span><br>
+          <button class="btn btn-primary" onclick="switchTab('pricing')" style="margin-top:10px;font-size:12px;padding:6px 16px">查看套餐升级</button>
+        </div>`;
+      } else {
+        contentEl.innerHTML = `<span style="color:var(--error)">[错误] ${err.error || err.detail?.error?.message || JSON.stringify(err)}</span>`;
+      }
+      chatHistory.pop();
       endStreaming();
       return;
     }
@@ -1812,6 +1848,10 @@ async function adminStats() {
   const view = document.getElementById('adminStatsView');
   view.style.display = 'block';
   const stats = data.stats || data;
+  const td = stats.tierDistribution || {};
+  const rev = stats.revenue || {};
+  const ic = stats.inviteCodes || {};
+  const storageGB = ((stats.totalStorageUsed || 0) / 1073741824).toFixed(2);
   view.innerHTML = `<div class="stat-grid">
     <div class="stat-card">
       <div class="stat-card-val">${stats.totalUsers || 0}</div>
@@ -1824,6 +1864,28 @@ async function adminStats() {
     <div class="stat-card">
       <div class="stat-card-val">${stats.todayRequests || 0}</div>
       <div class="stat-card-label">今日请求</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val" style="color:var(--success)">¥${rev.mrr || 0}</div>
+      <div class="stat-card-label">MRR (月收入)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val">${rev.conversionRate || '0%'}</div>
+      <div class="stat-card-label">付费转化率</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val">¥${rev.arpu || 0}</div>
+      <div class="stat-card-label">ARPU</div>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="padding:12px;background:var(--bg-canvas);border-radius:var(--radius-md);border:1px solid var(--border-s)">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">套餐分布</div>
+      <div style="font-size:13px"><span class="tier-badge badge-free">探索版 ${td.free || 0}</span> <span class="tier-badge badge-pro">专业版 ${td.pro || 0}</span> <span class="tier-badge badge-team">团队版 ${td.team || 0}</span></div>
+    </div>
+    <div style="padding:12px;background:var(--bg-canvas);border-radius:var(--radius-md);border:1px solid var(--border-s)">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">存储 / 邀请码</div>
+      <div style="font-size:13px">存储: ${storageGB}GB | 邀请码: ${ic.active || 0}/${ic.total || 0} (${ic.totalRedemptions || 0} 次兑换)</div>
     </div>
   </div>`;
 }
@@ -1918,6 +1980,11 @@ async function uploadPendingFiles() {
   });
   if (!res.ok) {
     const err = await res.json();
+    if (res.status === 403 && err.error?.includes('升级套餐')) {
+      toast(err.error, 'warning');
+      switchTab('pricing');
+      throw new Error(err.error);
+    }
     throw new Error(err.error || '文件上传失败');
   }
   const data = await res.json();
@@ -2179,8 +2246,10 @@ async function loadPricing() {
     html += '</div>';
     container.innerHTML = html;
 
-    // 同时加载配额
+    // 同时加载配额、文件、订单
     loadQuota();
+    loadFileManager();
+    loadOrderHistory();
   } catch (e) {
     container.innerHTML = '<span style="color:var(--error)">网络错误</span>';
   }
@@ -2313,6 +2382,88 @@ async function pollOrderStatus(orderId) {
       loadProfile();
     }
   }, 5000);
+}
+
+// ── 邀请码兑换 ──
+async function redeemInviteCode() {
+  if (!token) { toast('请先登录', 'error'); switchTab('settings'); return; }
+  const input = document.getElementById('redeemInput');
+  const code = input.value.trim();
+  if (!code) { toast('请输入邀请码', 'warning'); return; }
+  const el = document.getElementById('redeemResult');
+  const { status, data } = await api('POST', '/v1/me/redeem', { code });
+  if (status === 200) {
+    el.innerHTML = `<span style="color:var(--success)">${escapeHtml(data.message)}</span>`;
+    input.value = '';
+    loadPricing();
+    loadProfile();
+  } else {
+    el.innerHTML = `<span style="color:var(--error)">${escapeHtml(data.error || '兑换失败')}</span>`;
+  }
+}
+
+// ── 文件管理 ──
+async function loadFileManager() {
+  if (!token) return;
+  const card = document.getElementById('fileManagerCard');
+  const list = document.getElementById('fileList');
+  const { status, data } = await api('GET', '/v1/files/list');
+  if (status !== 200) return;
+  card.style.display = '';
+  document.getElementById('fileCount').textContent = `(${data.files.length} 个文件)`;
+
+  if (data.files.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:12px 0">暂无文件</div>';
+    return;
+  }
+
+  let html = '<div class="data-table" style="font-size:12px"><table><thead><tr><th>文件名</th><th>大小</th><th>类型</th><th>时间</th><th></th></tr></thead><tbody>';
+  for (const f of data.files) {
+    const size = f.size < 1024 ? f.size + 'B' : f.size < 1048576 ? (f.size/1024).toFixed(1) + 'KB' : (f.size/1048576).toFixed(1) + 'MB';
+    const date = f.createdAt ? new Date(f.createdAt).toLocaleDateString('zh-CN') : '-';
+    html += `<tr>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(f.originalName)}">${escapeHtml(f.originalName)}</td>
+      <td>${size}</td><td><span class="tier-badge badge-free" style="font-size:10px">${f.category}</span></td><td>${date}</td>
+      <td><button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;color:var(--error)" onclick="deleteUserFile('${f.fileId}')">删除</button></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  list.innerHTML = html;
+}
+
+async function deleteUserFile(fileId) {
+  if (!confirm('确认删除此文件？')) return;
+  const { status, data } = await api('DELETE', '/v1/files', { fileId });
+  if (status === 200) { toast('文件已删除', 'success'); loadFileManager(); loadQuota(); }
+  else toast(data.error || '删除失败', 'error');
+}
+
+// ── 订单历史 ──
+async function loadOrderHistory() {
+  if (!token) return;
+  const card = document.getElementById('orderHistoryCard');
+  const list = document.getElementById('orderList');
+  const { status, data } = await api('GET', '/v1/payment/orders');
+  if (status !== 200 || !data.orders?.length) return;
+  card.style.display = '';
+
+  const statusMap = { pending: ['待支付', 'var(--warning)'], paid: ['已支付', 'var(--info)'], activated: ['已激活', 'var(--success)'], expired: ['已过期', 'var(--text-3)'], refunded: ['已退款', 'var(--error)'] };
+  const tierMap = { pro: '专业版', team: '团队版' };
+
+  let html = '<div class="data-table" style="font-size:12px"><table><thead><tr><th>套餐</th><th>金额</th><th>方式</th><th>状态</th><th>时间</th></tr></thead><tbody>';
+  for (const o of data.orders) {
+    const [sText, sColor] = statusMap[o.status] || [o.status, 'var(--text-2)'];
+    const date = o.createdAt ? new Date(o.createdAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+    html += `<tr>
+      <td>${tierMap[o.tier] || o.tier}</td>
+      <td>¥${o.amount}</td>
+      <td>${o.payMethod === 'alipay' ? '支付宝' : '微信'}</td>
+      <td style="color:${sColor}">${sText}</td>
+      <td>${date}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  list.innerHTML = html;
 }
 
 // ── 初始化 ──
