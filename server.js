@@ -25,15 +25,19 @@ const { encrypt, decrypt } = require('./src/crypto-utils');
 const { route, listSkills, getIndexMeta } = require('./src/router-engine');
 const { proxyChat } = require('./src/proxy');
 const { RateLimiter } = require('./src/rate-limiter');
-const { findUserById, updateApiKey, logUsage, getUserUsage, listAllUsers, getSystemStats, closeDb } = require('./src/db');
+const { findUserById, updateApiKey, updateUserTier, updateStorageUsed, getTodayChatCount, logUsage, getUserUsage, listAllUsers, getSystemStats, closeDb } = require('./src/db');
+const quota = require('./src/quota');
 const { LoginGuard } = require('./src/login-guard');
 const { Metrics } = require('./src/metrics');
 const { handleUpgrade } = require('./src/ws-handler');
 const { detectProvider, getProviderConfig, sendLLMRequest, PROVIDERS } = require('./src/llm-router');
+const fileManager = require('./src/file-manager');
+const payment = require('./src/payment');
 
 // ─── 配置 ───
 const PORT = parseInt(process.env.PORT) || 3211;
 const MAX_BODY = parseInt(process.env.MAX_BODY_SIZE) || 524288; // 512KB
+const MAX_UPLOAD_BODY = 70 * 1024 * 1024; // 70MB (5 files * 10MB * 1.33 base64)
 const RPM = parseInt(process.env.RATE_LIMIT_RPM) || 30;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
@@ -49,7 +53,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ─── 工具函数 ───
 
-function readBody(req) {
+function readBody(req, limit) {
+  const maxSize = limit || MAX_BODY;
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
@@ -57,9 +62,9 @@ function readBody(req) {
     req.on('data', (chunk) => {
       if (destroyed) return;
       size += chunk.length;
-      if (size > MAX_BODY) {
+      if (size > maxSize) {
         destroyed = true;
-        reject({ status: 413, message: `请求体超过 ${MAX_BODY} 字节限制` });
+        reject({ status: 413, message: `请求体超过 ${Math.round(maxSize / 1024 / 1024)}MB 限制` });
         req.destroy();
         return;
       }
@@ -283,11 +288,20 @@ routes['GET:/v1/me'] = async (req, res) => {
   } else if (user.api_key_enc) {
     apiKeys = { anthropic: true };
   }
+  const tier = quota.getUserTier(user);
+  const storageCheck = quota.checkStorageQuota(user);
+  const todayChats = getTodayChatCount(userId);
+  const chatCheck = quota.checkDailyChatQuota(user, todayChats);
   json(res, 200, {
     id: user.id,
     email: user.email,
     hasApiKey: Object.values(apiKeys).some(v => v),
     apiKeys,
+    tier: { id: tier.id, name: tier.name, price: tier.price },
+    quota: {
+      storage: storageCheck,
+      dailyChats: chatCheck,
+    },
     createdAt: user.created_at,
   });
 };
@@ -334,11 +348,21 @@ routes['POST:/v1/route'] = async (req, res) => {
 
   if (METRICS_ENABLED) metrics.incCounter('route_queries_total', { primary: result.primary });
 
+  // #7 智能模型推荐: 根据任务复杂度推荐最优模型
+  let suggestedModel = null;
+  if (result.complexity === 'complex') {
+    suggestedModel = { model: 'claude-sonnet-4-5-20250514', reason: '复杂任务建议使用 Claude' };
+  } else if (result.complexity === 'medium') {
+    suggestedModel = { model: 'qwen-max', reason: '中等复杂度推荐 Qwen-Max' };
+  } else {
+    suggestedModel = { model: 'qwen-plus', reason: '简单任务推荐 Qwen-Plus (性价比最优)' };
+  }
+
   log('info', '路由分析', {
     userId, primary: result.primary,
     confidence: result.confidence, latencyMs: result.latencyMs,
   });
-  json(res, 200, { ok: true, ...result });
+  json(res, 200, { ok: true, ...result, suggestedModel });
 };
 
 // ─── 技能列表 ───
@@ -392,9 +416,33 @@ async function resolveApiKey(userId, body) {
   return decrypt(user.api_key_enc);
 }
 
+// ─── #9 上下文窗口管理 ───
+const MAX_CTX_TOKENS = { qwen: 120000, openai: 120000, anthropic: 180000, deepseek: 60000 };
+function trimContext(messages, systemPrompt, providerName) {
+  const ctxLimit = MAX_CTX_TOKENS[providerName] || 120000;
+  let estTokens = ((systemPrompt || '').length / 3) | 0;
+  const trimmed = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = typeof messages[i].content === 'string' ? messages[i].content : '';
+    const msgTokens = (content.length / 3) | 0;
+    if (estTokens + msgTokens > ctxLimit * 0.85) break;
+    estTokens += msgTokens;
+    trimmed.unshift(messages[i]);
+  }
+  if (trimmed.length === 0 && messages.length > 0) trimmed.push(messages[messages.length - 1]);
+  return { trimmed, estTokens, truncated: trimmed.length < messages.length };
+}
+
 routes['POST:/v1/chat'] = async (req, res) => {
   const userId = requireAuth(req);
   const body = await parseJsonBody(req);
+
+  // 配额检查: 每日对话
+  const user = findUserById(userId);
+  const todayChats = getTodayChatCount(userId);
+  const chatCheck = quota.checkDailyChatQuota(user, todayChats);
+  if (!chatCheck.allowed) throw { status: 403, message: chatCheck.message };
+
   const apiKey = await resolveApiKey(userId, body);
   const model = body.model || 'claude-sonnet-4-5-20250514';
 
@@ -419,6 +467,19 @@ routes['POST:/v1/chat'] = async (req, res) => {
       } catch { /* 路由失败不阻塞对话 */ }
     }
   }
+
+  // #9 上下文截断
+  const ctx = trimContext(body.messages, systemPrompt, providerName);
+  if (ctx.truncated) log('info', '上下文截断', { userId, original: body.messages.length, kept: ctx.trimmed.length, estTokens: ctx.estTokens });
+  body.messages = ctx.trimmed;
+
+  // 多模态: 将含 fileIds 的消息转换为 LLM content 数组
+  body.messages = body.messages.map(msg => {
+    if (msg.fileIds && msg.fileIds.length > 0) {
+      return { role: msg.role, content: fileManager.buildMultimodalContent(userId, msg, providerName) };
+    }
+    return msg;
+  });
 
   if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'false' });
 
@@ -475,6 +536,13 @@ routes['POST:/v1/chat'] = async (req, res) => {
 routes['POST:/v1/chat/stream'] = async (req, res) => {
   const userId = requireAuth(req);
   const body = await parseJsonBody(req);
+
+  // 配额检查: 每日对话
+  const userS = findUserById(userId);
+  const todayChatsS = getTodayChatCount(userId);
+  const chatCheckS = quota.checkDailyChatQuota(userS, todayChatsS);
+  if (!chatCheckS.allowed) throw { status: 403, message: chatCheckS.message };
+
   const apiKey = await resolveApiKey(userId, body);
   const model = body.model || 'claude-sonnet-4-5-20250514';
   const providerName = detectProvider(model);
@@ -499,9 +567,22 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
     }
   }
 
+  // #9 上下文截断
+  const ctxS = trimContext(body.messages, systemPrompt, providerName);
+  if (ctxS.truncated) log('info', '上下文截断', { userId, original: body.messages.length, kept: ctxS.trimmed.length, estTokens: ctxS.estTokens });
+  body.messages = ctxS.trimmed;
+
+  // 多模态: 将含 fileIds 的消息转换为 LLM content 数组
+  body.messages = body.messages.map(msg => {
+    if (msg.fileIds && msg.fileIds.length > 0) {
+      return { role: msg.role, content: fileManager.buildMultimodalContent(userId, msg, providerName) };
+    }
+    return msg;
+  });
+
   if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'true' });
 
-  log('info', 'Chat 流式开始', { userId, model, provider: providerName });
+  log('info', 'Chat 流式开始', { userId, model, provider: providerName, hasFiles: body.messages.some(m => Array.isArray(m.content)) });
 
   if (providerName === 'anthropic' && !body.base_url && !body.baseUrl) {
     const result = await proxyChat({
@@ -514,7 +595,8 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
     }, res);
 
     const latencyMs = Date.now() - startMs;
-    logUsage(userId, '/v1/chat/stream', 0, 0, model, latencyMs);
+    const sUsage = result?.usage || {};
+    logUsage(userId, '/v1/chat/stream', sUsage.input_tokens || 0, sUsage.output_tokens || 0, model, latencyMs);
 
     if (result && !result.streamed && !res.headersSent) {
       json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
@@ -535,12 +617,120 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
     );
 
     const latencyMs = Date.now() - startMs;
-    logUsage(userId, '/v1/chat/stream', 0, 0, model, latencyMs);
+    const sUsage = result?.usage || {};
+    logUsage(userId, '/v1/chat/stream', sUsage.input_tokens || 0, sUsage.output_tokens || 0, model, latencyMs);
 
     if (result && !result.streamed && !res.headersSent) {
       json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
     }
   }
+};
+
+// ─── 套餐 & 配额端点 ───
+
+routes['GET:/v1/tiers'] = async (req, res) => {
+  // 公开接口，无需认证
+  const tiers = quota.listTiers();
+  json(res, 200, { ok: true, tiers });
+};
+
+routes['GET:/v1/me/quota'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const user = findUserById(userId);
+  const tier = quota.getUserTier(user);
+  const todayChats = getTodayChatCount(userId);
+  json(res, 200, {
+    ok: true,
+    tier: { id: tier.id, name: tier.name, price: tier.price },
+    storage: quota.checkStorageQuota(user),
+    dailyChats: quota.checkDailyChatQuota(user, todayChats),
+    limits: {
+      files_per_msg: tier.files_per_msg,
+      max_file_mb: tier.max_file_mb,
+      memory_days: tier.memory_days,
+      projects: tier.projects,
+    },
+    features: tier.features,
+  });
+};
+
+routes['POST:/v1/me/tier'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const body = await parseJsonBody(req);
+  const user = findUserById(userId);
+  const currentTier = user.tier || 'free';
+  const newTier = body.tier;
+
+  const validation = quota.validateTierChange(currentTier, newTier);
+  if (!validation.valid) throw { status: 400, message: validation.error };
+
+  // Phase 1: 直接切换 (Phase 3 会加入支付验证)
+  const expiresAt = newTier === 'free' ? null : new Date(Date.now() + 30 * 86400000).toISOString();
+  await updateUserTier(userId, newTier, expiresAt);
+
+  log('info', '套餐变更', { userId, from: currentTier, to: newTier });
+  json(res, 200, {
+    ok: true,
+    message: `已切换到${validation.tier.name}`,
+    tier: { id: validation.tier.id, name: validation.tier.name, price: validation.tier.price },
+    expiresAt,
+  });
+};
+
+// ─── 支付端点 (Phase 3) ───
+
+routes['POST:/v1/payment/create'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const body = await parseJsonBody(req);
+  const { tier, payMethod } = body;
+  if (!tier || !payMethod) throw { status: 400, message: '缺少 tier 或 payMethod' };
+  if (!['alipay', 'wechat'].includes(payMethod)) throw { status: 400, message: '支付方式仅支持 alipay/wechat' };
+
+  const order = payment.createOrder(userId, tier, payMethod);
+  const payInfo = payment.initiatePayment(order);
+
+  log('info', '订单创建', { userId, orderId: order.orderId, tier, amount: order.amountYuan });
+  json(res, 200, { ok: true, order: { orderId: order.orderId, amount: order.amountYuan, tier }, payment: payInfo });
+};
+
+routes['GET:/v1/payment/status'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const orderId = url.searchParams.get('orderId');
+  if (!orderId) throw { status: 400, message: '缺少 orderId' };
+
+  const order = payment.getOrder(orderId);
+  if (!order || order.userId !== userId) throw { status: 404, message: '订单不存在' };
+
+  json(res, 200, { ok: true, order: { orderId: order.orderId, status: order.status, tier: order.tier, amount: order.amountYuan, paidAt: order.paidAt } });
+};
+
+routes['GET:/v1/payment/orders'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const orders = payment.getUserOrders(userId).map(o => ({
+    orderId: o.orderId, tier: o.tier, amount: o.amountYuan,
+    status: o.status, payMethod: o.payMethod, createdAt: o.createdAt, paidAt: o.paidAt,
+  }));
+  json(res, 200, { ok: true, orders });
+};
+
+// 模拟支付确认 (开发/测试用, 生产环境应禁用)
+routes['GET:/v1/payment/mock-confirm'] = async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const orderId = url.searchParams.get('orderId');
+  if (!orderId) throw { status: 400, message: '缺少 orderId' };
+
+  const result = await payment.completeOrder(orderId, 'mock_' + Date.now());
+  if (!result.success) throw { status: 400, message: result.error };
+
+  log('info', '模拟支付完成', { orderId, tier: result.order.tier });
+  // 返回成功页面
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders() });
+  res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支付成功</title></head>
+<body style="background:#0A0C10;color:#F0F4FF;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+<div style="text-align:center"><h1 style="color:#34D399">支付成功</h1>
+<p>已升级到 ${result.order.tier} 套餐</p>
+<p><a href="/" style="color:#4F8EF7">返回应用</a></p></div></body></html>`);
 };
 
 // ─── #10 管理端点 ───
@@ -562,6 +752,74 @@ routes['GET:/v1/admin/stats'] = async (req, res) => {
       heap: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
     },
   });
+};
+
+// ─── 文件上传/下载 ───
+
+routes['POST:/v1/files/upload'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const user = findUserById(userId);
+  const raw = await readBody(req, MAX_UPLOAD_BODY);
+  let body;
+  try { body = JSON.parse(raw); } catch { throw { status: 400, message: 'JSON 格式错误' }; }
+
+  const files = body.files;
+  if (!Array.isArray(files) || files.length === 0) throw { status: 400, message: '缺少 files 数组' };
+
+  // 配额检查: 附件数量
+  const fileCountCheck = quota.checkFileCountQuota(user, files.length);
+  if (!fileCountCheck.allowed) throw { status: 403, message: fileCountCheck.message };
+
+  // 预估总大小用于存储配额检查
+  let estimatedTotal = 0;
+  for (const f of files) {
+    const estSize = f.data ? Math.ceil(f.data.length * 3 / 4) : 0;
+    // 配额检查: 单文件大小
+    const sizeCheck = quota.checkFileSizeQuota(user, estSize);
+    if (!sizeCheck.allowed) throw { status: 403, message: sizeCheck.message };
+    estimatedTotal += estSize;
+  }
+
+  // 配额检查: 存储空间
+  const storageCheck = quota.checkStorageQuota(user, estimatedTotal);
+  if (!storageCheck.allowed) throw { status: 403, message: storageCheck.message };
+
+  const results = [];
+  let totalSaved = 0;
+  for (const f of files) {
+    const meta = fileManager.saveFile(userId, { name: f.name, mimeType: f.mimeType, data: f.data });
+    results.push({ fileId: meta.fileId, name: meta.originalName, mimeType: meta.mimeType, size: meta.size, category: meta.category });
+    totalSaved += meta.size;
+  }
+
+  // 更新用户已用存储
+  await updateStorageUsed(userId, totalSaved);
+
+  log('info', '文件上传', { userId, count: results.length, totalSize: totalSaved });
+  json(res, 200, { ok: true, files: results });
+};
+
+routes['GET:/v1/files/list'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const files = fileManager.listFiles(userId);
+  json(res, 200, { ok: true, files });
+};
+
+// 文件下载/预览 — 动态路由在 HTTP handler 中处理
+
+routes['DELETE:/v1/files'] = async (req, res) => {
+  const userId = requireAuth(req);
+  const body = await parseJsonBody(req);
+  if (!body.fileId) throw { status: 400, message: '缺少 fileId' };
+  // 获取文件大小用于回退存储计数
+  const file = fileManager.getFile(userId, body.fileId);
+  const ok = fileManager.deleteFile(userId, body.fileId);
+  if (!ok) throw { status: 404, message: '文件不存在' };
+  // 减少已用存储
+  if (file && file.metadata) {
+    await updateStorageUsed(userId, -(file.metadata.size || 0));
+  }
+  json(res, 200, { ok: true });
 };
 
 // ─── HTTP 服务器 ───
@@ -591,6 +849,33 @@ const server = http.createServer(async (req, res) => {
   // #3 静态文件优先 (GET 请求且非 /v1/ /health /metrics 路径)
   if (method === 'GET' && !pathname.startsWith('/v1/') && pathname !== '/health' && pathname !== '/metrics') {
     if (serveStatic(req, res)) return;
+  }
+
+  // 动态路由: 文件下载 GET /v1/files/:fileId
+  if (method === 'GET' && pathname.startsWith('/v1/files/') && pathname !== '/v1/files/list') {
+    try {
+      const fileId = pathname.split('/').pop();
+      // 支持 query token (img/a 标签无法发 header)
+      if (!req.headers.authorization && url.searchParams.get('token')) {
+        req.headers.authorization = 'Bearer ' + url.searchParams.get('token');
+      }
+      const userId = requireAuth(req);
+      const file = fileManager.getFile(userId, fileId);
+      if (!file) { json(res, 404, { error: '文件不存在' }); return; }
+      const stat = fs.statSync(file.filePath);
+      res.writeHead(200, {
+        'Content-Type': file.metadata.mimeType,
+        'Content-Length': stat.size,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(file.metadata.originalName)}"`,
+        'Cache-Control': 'private, max-age=3600',
+        ...corsHeaders(),
+      });
+      fs.createReadStream(file.filePath).pipe(res);
+      return;
+    } catch (e) {
+      if (e.status) { json(res, e.status, { error: e.message }); return; }
+      json(res, 500, { error: '文件下载失败' }); return;
+    }
   }
 
   // API 路由匹配

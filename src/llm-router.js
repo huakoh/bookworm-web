@@ -202,8 +202,32 @@ function sendLLMRequest(provider, apiKey, body, res, stream) {
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no',
         });
-        proxyRes.on('data', c => res.write(c));
-        proxyRes.on('end', () => { res.end(); resolve({ streamed: true, status: 200 }); });
+        let lastDataLine = '';
+        proxyRes.on('data', c => {
+          res.write(c);
+          // 提取最后一条 SSE data 行，用于解析 usage 统计
+          const text = c.toString();
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              lastDataLine = line.slice(6);
+            }
+          }
+        });
+        proxyRes.on('end', () => {
+          res.end();
+          let usage = null;
+          try {
+            const parsed = JSON.parse(lastDataLine);
+            if (parsed.usage) {
+              usage = {
+                input_tokens: parsed.usage.prompt_tokens || parsed.usage.input_tokens || 0,
+                output_tokens: parsed.usage.completion_tokens || parsed.usage.output_tokens || 0,
+              };
+            }
+          } catch { /* SSE 最后一帧无 usage 数据 */ }
+          resolve({ streamed: true, status: 200, usage });
+        });
         proxyRes.on('error', e => { res.end(); reject(e); });
         res.on('close', () => proxyReq.destroy());
       } else {

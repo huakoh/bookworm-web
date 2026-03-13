@@ -469,6 +469,52 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 .input-model-pill:hover { color: var(--text-1); border-color: var(--border-d); }
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
+/* #2 技能路由标签 */
+.skill-pill {
+  display: none; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--radius-full);
+  font-size: 11px; font-weight: 500; color: var(--accent);
+  background: rgba(124,106,247,0.08); border: 1px solid rgba(124,106,247,0.2);
+  white-space: nowrap; transition: all var(--t-fast);
+}
+.skill-pill.visible { display: flex; }
+.skill-pill .skill-icon { font-size: 10px; }
+
+/* #7 模型推荐提示 */
+.model-suggest {
+  display: none; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--radius-full);
+  font-size: 11px; color: var(--info); cursor: pointer;
+  background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2);
+  white-space: nowrap; transition: all var(--t-fast);
+}
+.model-suggest.visible { display: flex; }
+.model-suggest:hover { background: rgba(96,165,250,0.15); }
+
+/* #10 用量仪表盘 */
+.usage-chart { display: flex; align-items: flex-end; gap: 3px; height: 100px; padding: 8px 0; }
+.usage-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+.usage-bar { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--primary); transition: height var(--t-base); }
+.usage-bar-label { font-size: 9px; color: var(--text-3); margin-top: 4px; transform: rotate(-45deg); white-space: nowrap; }
+.usage-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.usage-stat { text-align: center; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.usage-stat-val { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.usage-stat-label { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+/* #8 代码沙箱预览 */
+.code-sandbox-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding: 3px 10px; border-radius: var(--radius-sm);
+  font-size: 11px; color: var(--success); cursor: pointer;
+  background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2);
+  transition: all var(--t-fast);
+}
+.code-sandbox-btn:hover { background: rgba(52,211,153,0.15); }
+.code-sandbox-frame {
+  width: 100%; height: 300px; border: 1px solid var(--border-d);
+  border-radius: var(--radius-sm); margin-top: 8px; background: #fff;
+}
+
 .chat-send {
   margin-left: auto; width: 34px; height: 34px;
   border-radius: var(--radius-md); border: none;
@@ -482,6 +528,63 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 .chat-send:disabled { background: var(--bg-muted); color: var(--text-3); box-shadow: none; cursor: not-allowed; transform: none; }
 .chat-send.stop { background: rgba(248,113,113,0.15); color: var(--error); border: 1px solid rgba(248,113,113,0.3); box-shadow: none; }
 
+/* ── 文件上传 ── */
+.file-upload-btn {
+  width: 34px; height: 34px; border-radius: var(--radius-md); border: none;
+  background: transparent; color: var(--text-3); cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.file-upload-btn:hover { color: var(--text-1); background: var(--bg-hover); }
+.file-chips { display: none; flex-wrap: wrap; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--border-s); }
+.file-chips.has-files { display: flex; }
+.file-chip {
+  display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+  border-radius: var(--radius-sm); font-size: 11px; color: var(--text-1);
+  background: var(--bg-subtle); border: 1px solid var(--border-d);
+  max-width: 200px; animation: fadeIn 200ms var(--ease) both;
+}
+.file-chip-thumb {
+  width: 24px; height: 24px; border-radius: 3px; object-fit: cover; flex-shrink: 0;
+}
+.file-chip-icon {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.file-chip-size { color: var(--text-3); font-size: 10px; flex-shrink: 0; }
+.file-chip-remove {
+  width: 16px; height: 16px; border-radius: 50%; border: none; padding: 0;
+  background: rgba(248,113,113,0.15); color: var(--error); cursor: pointer;
+  font-size: 10px; line-height: 16px; text-align: center; flex-shrink: 0;
+  transition: background var(--t-fast);
+}
+.file-chip-remove:hover { background: rgba(248,113,113,0.3); }
+.chat-input-box.drag-over { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,142,247,0.2), 0 4px 12px rgba(0,0,0,0.5); }
+
+/* 消息中的附件 */
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.msg-attach {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border-radius: var(--radius-sm); font-size: 11px; cursor: pointer;
+  background: rgba(79,142,247,0.06); border: 1px solid rgba(79,142,247,0.15);
+  color: var(--primary); transition: background var(--t-fast); text-decoration: none;
+}
+.msg-attach:hover { background: rgba(79,142,247,0.12); }
+.msg-attach-img {
+  width: 120px; height: 80px; border-radius: var(--radius-sm); object-fit: cover;
+  border: 1px solid var(--border-d); cursor: pointer; transition: transform var(--t-fast);
+}
+.msg-attach-img:hover { transform: scale(1.02); }
+/* 图片灯箱 */
+.lightbox {
+  display: none; position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center; cursor: pointer;
+}
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+
 /* ============================================
    SETTINGS PANEL
    ============================================ */
@@ -494,6 +597,90 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 .admin-wrap { flex: 1; overflow-y: auto; padding: 32px 24px; }
 .admin-inner { max-width: 720px; margin: 0 auto; }
 
+/* ─── 美化数据展示 ─── */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 14px; font-size: 12px; }
+.data-table th {
+  text-align: left; padding: 8px 12px; font-weight: 600; color: var(--text-2);
+  background: var(--bg-subtle); border-bottom: 1px solid var(--border-d);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.data-table th:first-child { border-radius: var(--radius-sm) 0 0 0; }
+.data-table th:last-child { border-radius: 0 var(--radius-sm) 0 0; }
+.data-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border-s); color: var(--text-1);
+  transition: background var(--t-fast);
+}
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table tr:last-child td { border-bottom: none; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+  border-radius: var(--radius-full); font-size: 11px; font-weight: 500;
+}
+.badge-ok { background: rgba(52,211,153,0.1); color: var(--success); border: 1px solid rgba(52,211,153,0.25); }
+.badge-no { background: rgba(255,255,255,0.03); color: var(--text-3); border: 1px solid var(--border-s); }
+.badge-id { background: rgba(79,142,247,0.08); color: var(--primary); border: 1px solid rgba(79,142,247,0.2); font-family: var(--font-mono); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 14px; }
+.stat-card {
+  padding: 16px; border-radius: var(--radius-md); text-align: center;
+  background: linear-gradient(135deg, var(--bg-subtle), var(--bg-overlay));
+  border: 1px solid var(--border-d);
+}
+.stat-card-val { font-size: 28px; font-weight: 700; color: var(--text-1); line-height: 1.2; }
+.stat-card-label { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+.profile-card { margin-top: 14px; padding: 16px; border-radius: var(--radius-md); background: var(--bg-canvas); border: 1px solid var(--border-d); }
+.profile-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-s); }
+.profile-row:last-child { border-bottom: none; }
+.profile-label { font-size: 11px; color: var(--text-3); min-width: 80px; flex-shrink: 0; }
+.profile-val { font-size: 13px; color: var(--text-1); font-family: var(--font-mono); word-break: break-all; }
+
+/* ── 套餐/定价 ── */
+.tier-badge { display: inline-block; padding: 2px 10px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+.badge-free { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+.badge-pro { background: rgba(79,142,247,0.12); color: var(--primary); border: 1px solid rgba(79,142,247,0.3); }
+.badge-team { background: rgba(124,106,247,0.12); color: var(--accent); border: 1px solid rgba(124,106,247,0.3); }
+
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.pricing-tier {
+  padding: 24px; border-radius: var(--radius-lg); background: var(--bg-canvas);
+  border: 1px solid var(--border-d); position: relative; transition: border-color var(--t-base), box-shadow var(--t-base);
+}
+.pricing-tier:hover { border-color: var(--border-strong); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.pricing-tier.current { border-color: var(--primary); box-shadow: 0 0 20px rgba(79,142,247,0.15); }
+.pricing-tier.popular { border-color: var(--accent); }
+.pricing-tier.popular::before {
+  content: '推荐'; position: absolute; top: -10px; right: 16px;
+  padding: 2px 12px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600;
+  background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff;
+}
+.tier-name { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.tier-price { margin: 12px 0; }
+.tier-price .amount { font-size: 36px; font-weight: 800; color: var(--text-1); }
+.tier-price .unit { font-size: 14px; color: var(--text-2); margin-left: 2px; }
+.tier-cost { font-size: 11px; color: var(--text-3); margin-bottom: 16px; }
+.tier-features { list-style: none; padding: 0; margin: 16px 0; }
+.tier-features li { padding: 6px 0; font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+.tier-features li::before { content: '✓'; color: var(--success); font-weight: 700; font-size: 14px; }
+.tier-btn { width: 100%; margin-top: 16px; }
+
+.quota-bars { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.quota-item label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.quota-bar-bg { height: 8px; border-radius: 4px; background: var(--bg-subtle); overflow: hidden; }
+.quota-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s var(--ease); min-width: 2px; }
+.quota-bar-fill.ok { background: linear-gradient(90deg, var(--success), #2dd4bf); }
+.quota-bar-fill.warn { background: linear-gradient(90deg, var(--warning), #f59e0b); }
+.quota-bar-fill.danger { background: linear-gradient(90deg, var(--error), #ef4444); }
+.quota-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+/* ── 移动端侧栏遮罩 ── */
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 49;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ============================================
    RESPONSIVE
    ============================================ */
@@ -502,28 +689,137 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
   .nav-tab span { display: none; }
 }
 @media (max-width: 767px) {
+  /* ─── Layout ─── */
   .sidebar { position: fixed; left: 0; top: var(--nav-h); bottom: 0; z-index: 50; width: 280px; transform: translateX(-100%); transition: transform var(--t-slow); }
   .sidebar.mobile-open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,0.6); }
+  .sidebar.mobile-open ~ .sidebar-backdrop { display: block; }
   .sidebar.collapsed { transform: translateX(-100%); }
   .nav-tabs { display: none; }
+
+  /* ─── Navbar 紧凑化 ─── */
+  .navbar { padding: 0 12px; gap: 8px; }
+  .nav-logo-text { font-size: 14px; }
+  .nav-logo-ver { display: none; }
+  .nav-status { padding: 2px 7px; font-size: 10px; }
+  #statusText { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-logout { font-size: 10px; padding: 3px 6px; }
+
+  /* ─── Mobile Tab Bar (底部导航) ─── */
   .mobile-tabs {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
     display: flex; justify-content: space-around; align-items: center;
     background: rgba(13,15,20,0.95); backdrop-filter: blur(20px);
-    border-top: 1px solid var(--border-s); padding: 6px 8px;
-    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-s); padding: 4px 4px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
   }
   .mobile-tab {
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 6px 12px; border-radius: var(--radius-md); border: none;
+    padding: 8px 14px; border-radius: var(--radius-md); border: none;
     background: transparent; color: var(--text-3); font-size: 10px;
-    cursor: pointer; transition: color var(--t-fast);
+    cursor: pointer; transition: color var(--t-fast), background var(--t-fast);
+    position: relative; -webkit-tap-highlight-color: transparent;
   }
-  .mobile-tab.active { color: var(--primary); }
-  .msg-bubble { max-width: 88%; }
-  .chat-feed { padding-bottom: 100px; }
+  .mobile-tab.active { color: var(--primary); background: rgba(79,142,247,0.08); }
+  .mobile-tab.active::after {
+    content: ''; position: absolute; top: 0; left: 25%; right: 25%;
+    height: 2px; border-radius: 0 0 2px 2px; background: var(--primary);
+  }
+
+  /* ─── Chat 区域 ─── */
+  .chat-header { padding: 0 12px; gap: 6px; height: 44px; }
+  .chat-prov-badge { padding: 2px 8px; font-size: 10px; }
+  .chat-model-label { font-size: 11px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-sidebar-btn { width: 28px; height: 28px; margin-left: 0; }
+  .chat-sidebar-btn:first-of-type { margin-left: auto; }
+
+  .chat-feed { padding: 16px 12px; padding-bottom: 80px; }
+  .chat-feed-inner { gap: 14px; }
+  .msg-bubble { max-width: 90%; padding: 10px 14px; font-size: 13px; line-height: 1.6; }
+  .msg-avatar { width: 24px; height: 24px; font-size: 10px; }
+  .msg-content pre { padding: 10px; margin: 8px -4px; font-size: 11px; }
+  .msg-content pre code { font-size: 11px; }
+  .msg-content h1 { font-size: 17px; } .msg-content h2 { font-size: 15px; } .msg-content h3 { font-size: 13px; }
+  .msg-provider-tag { font-size: 9px; }
+
+  /* ─── Chat 输入框 ─── */
+  .chat-input-area { padding: 8px 10px; padding-bottom: max(60px, calc(env(safe-area-inset-bottom) + 56px)); }
+  .chat-input-box { border-radius: var(--radius-lg); }
+  .chat-textarea { padding: 10px 14px; font-size: 14px; min-height: 42px; }
+  .chat-input-footer { padding: 4px 10px; gap: 4px; flex-wrap: wrap; }
+  .input-model-pill { padding: 2px 8px; font-size: 10px; }
+  .skill-pill { padding: 2px 8px; font-size: 10px; }
+  .model-suggest { padding: 2px 8px; font-size: 10px; }
+  .chat-send { width: 30px; height: 30px; }
+
+  /* ─── Welcome ─── */
+  .chat-welcome-icon { width: 52px; height: 52px; font-size: 22px; }
+  .chat-welcome h3 { font-size: 16px; }
+  .chat-welcome p { font-size: 12px; max-width: 280px; padding: 0 16px; }
+
+  /* ─── 卡片/面板 ─── */
+  .card { padding: 16px; border-radius: var(--radius-md); }
+  .card-title { font-size: 13px; margin-bottom: 12px; }
   .card-grid { grid-template-columns: 1fr; }
+  .form-input { font-size: 14px; padding: 10px 12px; }
+  .form-label { font-size: 11px; }
+  .btn { font-size: 12px; padding: 8px 14px; }
+  .btn-row { gap: 6px; }
+
+  .auth-wrap, .route-wrap, .admin-wrap, .settings-wrap { padding: 20px 12px; }
+  .settings-inner, .auth-inner, .route-inner, .admin-inner { max-width: 100%; }
+
+  /* ─── 数据展示组件 ─── */
+  .data-table { font-size: 11px; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table th { padding: 6px 8px; font-size: 10px; white-space: nowrap; }
+  .data-table td { padding: 8px; }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat-card { padding: 12px 8px; }
+  .stat-card-val { font-size: 22px; }
+  .stat-card-label { font-size: 10px; }
+  .profile-card { padding: 12px; }
+  .profile-row { gap: 8px; padding: 6px 0; }
+  .profile-label { font-size: 10px; min-width: 60px; }
+  .profile-val { font-size: 12px; }
+
+  /* ─── 路由面板 ─── */
+  .route-primary { font-size: 18px; }
+  .route-meta { font-size: 11px; }
+  .route-cand { padding: 6px 10px; font-size: 11px; flex-wrap: wrap; gap: 4px; }
+  .route-cand-name { min-width: 90px; font-size: 11px; }
+
+  /* ─── 用量仪表盘 ─── */
+  .usage-chart { height: 80px; }
+  .usage-summary { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .usage-stat-val { font-size: 15px; }
+  .usage-stat-label { font-size: 10px; }
+
+  /* ─── Toast ─── */
+  .toast { right: 12px; left: 12px; max-width: none; font-size: 12px; }
+
+  /* ─── 代码沙箱 ─── */
+  .code-sandbox-frame { height: 200px; }
+
+  /* ─── 文件上传 ─── */
+  .file-chip { max-width: 160px; font-size: 10px; padding: 3px 8px; }
+  .file-chip-thumb { width: 20px; height: 20px; }
+  .file-upload-btn { width: 30px; height: 30px; }
+  .msg-attach-img { width: 100px; height: 66px; }
+
+  /* ─── 输出区 ─── */
+  .output { font-size: 11px; padding: 10px; max-height: 250px; }
 }
+
+/* ─── 超小屏 (≤380px) ─── */
+@media (max-width: 380px) {
+  .navbar { padding: 0 8px; }
+  .nav-logo-mark { width: 26px; height: 26px; font-size: 12px; }
+  .nav-status { display: none; }
+  .chat-feed { padding: 12px 8px; }
+  .msg-bubble { max-width: 94%; padding: 8px 12px; }
+  .chat-input-area { padding: 6px 8px; padding-bottom: max(56px, calc(env(safe-area-inset-bottom) + 52px)); }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+}
+
 @media (min-width: 768px) { .mobile-tabs { display: none; } }
 
 /* ── Toast ── */
@@ -572,6 +868,10 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
       <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>设置</span>
     </button>
+    <button class="nav-tab" data-tab="pricing" title="套餐">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      <span>套餐</span>
+    </button>
     <button class="nav-tab" data-tab="admin" title="管理">
       <svg class="icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       <span>管理</span>
@@ -597,6 +897,10 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
     <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33"/></svg>
     设置
   </button>
+  <button class="mobile-tab" data-tab="pricing">
+    <svg class="icon-sm" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+    套餐
+  </button>
   <button class="mobile-tab" data-tab="admin">
     <svg class="icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
     管理
@@ -620,6 +924,7 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
       <input class="base-input" id="baseUrlInput" type="url" placeholder="使用默认端点" spellcheck="false">
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
   <!-- ── Main Content ── -->
   <div class="main">
@@ -631,6 +936,9 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
           <span style="font-weight:800">A</span> Anthropic
         </div>
         <span class="chat-model-label" id="chatModelLabel">claude-sonnet-4-5-20250514</span>
+        <button class="chat-sidebar-btn" onclick="clearChatHistory()" title="清空对话" style="margin-right:4px">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        </button>
         <button class="chat-sidebar-btn" onclick="toggleSidebar()" title="Provider 选择">
           <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         </button>
@@ -648,11 +956,18 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
         <div class="chat-input-inner">
           <div class="chat-input-box">
             <textarea class="chat-textarea" id="chatInput" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>
+            <div class="file-chips" id="fileChips"></div>
             <div class="chat-input-footer">
+              <button class="file-upload-btn" id="fileUploadBtn" onclick="document.getElementById('fileInput').click()" title="上传文件 (图片/文档/代码)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.md,.js,.py,.ts,.tsx,.jsx,.json,.csv,.xml,.html,.css,.go,.rs,.java,.c,.cpp,.h,.sh,.sql,.yaml,.yml,.toml" style="display:none">
               <div class="input-model-pill" id="inputModelPill" onclick="toggleSidebar()">
                 <span class="pill-dot" id="pillDot" style="background:var(--prov-anthropic)"></span>
                 <span id="pillModelName">claude-sonnet-4-5</span>
               </div>
+              <div class="skill-pill" id="skillPill"><span class="skill-icon">⚡</span><span id="skillPillName"></span></div>
+              <div class="model-suggest" id="modelSuggest" onclick="applyModelSuggestion()"><span id="suggestText"></span></div>
               <button class="chat-send" id="sendBtn" onclick="doChat()" title="发送">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
@@ -703,7 +1018,7 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
                   </div>
                 </div>
                 <div>
-                  <div id="userInfo" class="output" style="min-height:120px">未登录</div>
+                  <div id="userInfo" style="min-height:120px"><span style="color:var(--text-3)">未登录</span></div>
                 </div>
               </div>
             </div>
@@ -729,14 +1044,44 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
               <button class="btn btn-ghost" onclick="toggleVis('apiKeyInput')">显示/隐藏</button>
             </div>
           </div>
-          <!-- 用量卡片 -->
+          <!-- 用量卡片 (#10 仪表盘) -->
           <div class="card">
             <div class="card-title">
               <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               用量统计
             </div>
-            <button class="btn btn-secondary" onclick="loadUsage()">加载最近 30 天</button>
+            <button class="btn btn-secondary" onclick="loadUsageDashboard()">加载最近 30 天</button>
+            <div id="usageDashboard" style="display:none">
+              <div class="usage-summary" id="usageSummary"></div>
+              <div class="usage-chart" id="usageChart"></div>
+            </div>
             <div id="usageData" class="output" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRICING Panel -->
+    <div class="panel" id="panel-pricing">
+      <div class="settings-wrap">
+        <div class="settings-inner">
+          <!-- 当前套餐 & 配额 -->
+          <div class="card" id="quotaCard" style="display:none">
+            <div class="card-title">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              我的配额
+            </div>
+            <div id="quotaInfo"></div>
+          </div>
+          <!-- 套餐对比 -->
+          <div class="card">
+            <div class="card-title">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+              套餐方案
+            </div>
+            <div id="pricingTiers" style="margin-top:12px">
+              <button class="btn btn-secondary" onclick="loadPricing()">加载套餐</button>
+            </div>
           </div>
         </div>
       </div>
@@ -757,6 +1102,8 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
               <button class="btn btn-primary" onclick="adminUsers()">用户列表</button>
               <button class="btn btn-secondary" onclick="adminStats()">系统统计</button>
             </div>
+            <div id="adminStatsView" style="display:none"></div>
+            <div id="adminUsersView" style="display:none"></div>
             <div id="adminResult" class="output" style="display:none"></div>
           </div>
         </div>
@@ -765,6 +1112,9 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 
   </div><!-- /main -->
 </div><!-- /app -->
+
+<!-- 图片灯箱 -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')"><img id="lightboxImg" src="" alt=""></div>
 
 <script>
 // ═══════════════════════════════════════════════
@@ -795,7 +1145,7 @@ const API = location.origin;
 let token = localStorage.getItem('bw_token') || '';
 let refreshToken = localStorage.getItem('bw_refresh') || '';
 let currentUser = null;
-let chatHistory = [];
+let chatHistory = JSON.parse(localStorage.getItem('bw_chat_history') || '[]');
 let isStreaming = false;
 let abortController = null;
 
@@ -938,6 +1288,9 @@ function toggleSidebar() {
     sb.classList.toggle('collapsed');
   }
 }
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+}
 
 // ── Tab 切换 ──
 function switchTab(tabId) {
@@ -954,6 +1307,9 @@ function switchTab(tabId) {
   } else {
     if (window.innerWidth >= 768) sb.classList.add('collapsed');
   }
+
+  // 自动加载套餐页
+  if (tabId === 'pricing') loadPricing();
 }
 
 document.querySelectorAll('.nav-tab, .mobile-tab').forEach(tab => {
@@ -1045,7 +1401,7 @@ function doLogout() {
   localStorage.removeItem('bw_token');
   localStorage.removeItem('bw_refresh');
   updateAuth(null);
-  document.getElementById('userInfo').textContent = '未登录';
+  document.getElementById('userInfo').innerHTML = '<span style="color:var(--text-3)">未登录</span>';
   toast('已登出', 'info');
 }
 
@@ -1072,7 +1428,18 @@ async function loadProfile() {
   const { status, data } = await api('GET', '/v1/me');
   if (status === 200) {
     updateAuth(data.email);
-    document.getElementById('userInfo').textContent = JSON.stringify(data, null, 2);
+    const el = document.getElementById('userInfo');
+    const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString('zh-CN') : '-';
+    const tierName = data.tier?.name || '探索版';
+    const tierBadge = data.tier?.id === 'team' ? 'badge-team' : data.tier?.id === 'pro' ? 'badge-pro' : 'badge-free';
+    el.innerHTML = `<div class="profile-card">
+      <div class="profile-row"><span class="profile-label">邮箱</span><span class="profile-val">${escapeHtml(data.email || '')}</span></div>
+      <div class="profile-row"><span class="profile-label">用户 ID</span><span class="profile-val">${data.id || '-'}</span></div>
+      <div class="profile-row"><span class="profile-label">套餐</span><span class="profile-val"><span class="tier-badge ${tierBadge}">${tierName}</span></span></div>
+      <div class="profile-row"><span class="profile-label">注册时间</span><span class="profile-val">${created}</span></div>
+      ${data.quota ? `<div class="profile-row"><span class="profile-label">存储</span><span class="profile-val">${data.quota.storage.used_mb}MB / ${data.quota.storage.limit_mb}MB</span></div>
+      <div class="profile-row"><span class="profile-label">今日对话</span><span class="profile-val">${data.quota.dailyChats.used} / ${data.quota.dailyChats.limit === -1 ? '无限' : data.quota.dailyChats.limit}</span></div>` : ''}
+    </div>`;
     renderKeyStatus(data.apiKeys);
   }
 }
@@ -1115,10 +1482,11 @@ async function doChat() {
   if (isStreaming) { stopStreaming(); return; }
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
-  if (!text || !token) {
+  if (!text && pendingFiles.length === 0) {
     if (!token) { toast('请先登录', 'error'); switchTab('settings'); }
     return;
   }
+  if (!token) { toast('请先登录', 'error'); switchTab('settings'); return; }
   input.value = '';
   autoResizeTextarea();
 
@@ -1126,8 +1494,34 @@ async function doChat() {
   const welcome = document.getElementById('chatWelcome');
   if (welcome) welcome.style.display = 'none';
 
-  chatHistory.push({ role: 'user', content: text });
-  appendMsg('user', text);
+  // 上传附件
+  let uploadedFiles = [];
+  let fileIds = [];
+  if (pendingFiles.length > 0) {
+    try {
+      toast('正在上传文件...', 'info');
+      uploadedFiles = await uploadPendingFiles();
+      fileIds = uploadedFiles.map(f => f.fileId);
+      pendingFiles = [];
+      renderFileChips();
+    } catch (e) {
+      toast('文件上传失败: ' + e.message, 'error');
+      return;
+    }
+  }
+
+  const userMsg = { role: 'user', content: text || '(请分析附件)' };
+  if (fileIds.length > 0) userMsg.fileIds = fileIds;
+  chatHistory.push(userMsg);
+  saveChatHistory();
+
+  // 渲染用户消息 (含附件)
+  const attachHtml = renderAttachments(fileIds, uploadedFiles);
+  appendMsg('user', text || '', false, attachHtml);
+
+  // 隐藏技能和模型推荐标签
+  document.getElementById('skillPill').classList.remove('visible');
+  document.getElementById('modelSuggest').classList.remove('visible');
 
   // 开始流式请求
   isStreaming = true;
@@ -1187,8 +1581,9 @@ async function doChat() {
       }
     }
 
-    contentEl.innerHTML = renderMarkdown(fullText);
+    contentEl.innerHTML = renderMarkdownWithSandbox(fullText);
     chatHistory.push({ role: 'assistant', content: fullText });
+    saveChatHistory();
   } catch (e) {
     if (e.name !== 'AbortError') {
       contentEl.innerHTML = `<span style="color:var(--error)">[连接错误] ${e.message}</span>`;
@@ -1209,7 +1604,7 @@ function endStreaming() {
   sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
 }
 
-function appendMsg(role, text, streaming = false) {
+function appendMsg(role, text, streaming = false, attachHtml = '') {
   const inner = document.getElementById('chatFeedInner');
   const div = document.createElement('div');
   div.className = 'msg ' + role;
@@ -1231,6 +1626,7 @@ function appendMsg(role, text, streaming = false) {
     <div class="msg-avatar ${avClass}">${avText}</div>
     <div class="msg-bubble">
       ${provTag}
+      ${attachHtml}
       <div class="msg-content">${content}</div>
     </div>`;
   inner.appendChild(div);
@@ -1297,6 +1693,8 @@ function escapeHtml(text) {
 // ── Textarea 自动高度 ──
 const chatInput = document.getElementById('chatInput');
 chatInput.addEventListener('input', autoResizeTextarea);
+chatInput.addEventListener('input', onInputSkillRoute); // #2 技能实时路由
+chatInput.addEventListener('paste', onChatPaste);       // #5 代码粘贴检测
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); }
 });
@@ -1366,9 +1764,35 @@ async function adminUsers() {
   if (!t) return toast('请输入 Admin Token', 'error');
   const res = await fetch(API + '/v1/admin/users', { headers: { 'Authorization': 'Admin ' + t } });
   const data = await res.json();
-  const el = document.getElementById('adminResult');
-  el.style.display = 'block';
-  el.textContent = JSON.stringify(data, null, 2);
+  document.getElementById('adminStatsView').style.display = 'none';
+  if (data.error) {
+    document.getElementById('adminUsersView').style.display = 'none';
+    const el = document.getElementById('adminResult');
+    el.style.display = 'block';
+    el.textContent = data.error;
+    return;
+  }
+  document.getElementById('adminResult').style.display = 'none';
+  const view = document.getElementById('adminUsersView');
+  view.style.display = 'block';
+  const users = data.users || data || [];
+  const count = data.count || users.length;
+  let html = `<div style="margin-top:14px;font-size:12px;color:var(--text-2)">${count} 个用户</div>`;
+  html += `<table class="data-table"><thead><tr><th>ID</th><th>邮箱</th><th>API Key</th><th>注册时间</th></tr></thead><tbody>`;
+  for (const u of users) {
+    const created = u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-CN') : '-';
+    const keyBadge = u.hasApiKey
+      ? '<span class="badge badge-ok">已配置</span>'
+      : '<span class="badge badge-no">未配置</span>';
+    html += `<tr>
+      <td><span class="badge badge-id">#${u.id}</span></td>
+      <td>${escapeHtml(u.email)}</td>
+      <td>${keyBadge}</td>
+      <td style="color:var(--text-2)">${created}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  view.innerHTML = html;
 }
 
 async function adminStats() {
@@ -1376,15 +1800,526 @@ async function adminStats() {
   if (!t) return toast('请输入 Admin Token', 'error');
   const res = await fetch(API + '/v1/admin/stats', { headers: { 'Authorization': 'Admin ' + t } });
   const data = await res.json();
-  const el = document.getElementById('adminResult');
-  el.style.display = 'block';
-  el.textContent = JSON.stringify(data, null, 2);
+  document.getElementById('adminUsersView').style.display = 'none';
+  if (data.error) {
+    document.getElementById('adminStatsView').style.display = 'none';
+    const el = document.getElementById('adminResult');
+    el.style.display = 'block';
+    el.textContent = data.error;
+    return;
+  }
+  document.getElementById('adminResult').style.display = 'none';
+  const view = document.getElementById('adminStatsView');
+  view.style.display = 'block';
+  const stats = data.stats || data;
+  view.innerHTML = `<div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-card-val">${stats.totalUsers || 0}</div>
+      <div class="stat-card-label">总用户数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val">${stats.usersWithApiKey || 0}</div>
+      <div class="stat-card-label">已配置 Key</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val">${stats.todayRequests || 0}</div>
+      <div class="stat-card-label">今日请求</div>
+    </div>
+  </div>`;
+}
+
+// ── 文件上传 ──
+let pendingFiles = []; // { file, base64, preview, name, mimeType, size }
+const FILE_ICONS = { image: '🖼️', pdf: '📄', text: '📝', code: '💻' };
+const MAX_UPLOAD_FILES = 5;
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+
+document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+// 拖拽支持
+const chatInputBox = document.querySelector('.chat-input-box');
+chatInputBox.addEventListener('dragover', (e) => { e.preventDefault(); chatInputBox.classList.add('drag-over'); });
+chatInputBox.addEventListener('dragleave', () => chatInputBox.classList.remove('drag-over'));
+chatInputBox.addEventListener('drop', (e) => {
+  e.preventDefault(); chatInputBox.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFileSelect({ target: { files: e.dataTransfer.files } });
+});
+
+// 剪贴板粘贴图片
+chatInput.addEventListener('paste', (e) => {
+  const items = Array.from(e.clipboardData.items).filter(i => i.type.startsWith('image/'));
+  if (items.length === 0) return;
+  e.preventDefault();
+  const files = items.map(i => i.getAsFile()).filter(Boolean);
+  if (files.length) handleFileSelect({ target: { files } });
+});
+
+async function handleFileSelect(event) {
+  const newFiles = Array.from(event.target.files || []);
+  for (const file of newFiles) {
+    if (pendingFiles.length >= MAX_UPLOAD_FILES) { toast('每条消息最多 ' + MAX_UPLOAD_FILES + ' 个文件', 'error'); break; }
+    if (file.size > MAX_UPLOAD_SIZE) { toast(file.name + ' 超过 10MB 限制', 'error'); continue; }
+    const base64 = await readFileBase64(file);
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+    const category = file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('text/') ? 'text' : 'code';
+    pendingFiles.push({ file, base64, preview, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, category });
+    renderFileChips();
+  }
+  // 重置 input 以允许重复选择同名文件
+  if (event.target.value) event.target.value = '';
+}
+
+function readFileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFileChips() {
+  const container = document.getElementById('fileChips');
+  container.innerHTML = '';
+  container.classList.toggle('has-files', pendingFiles.length > 0);
+  pendingFiles.forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    const thumb = f.preview
+      ? '<img class="file-chip-thumb" src="' + f.preview + '">'
+      : '<span class="file-chip-icon">' + (FILE_ICONS[f.category] || '📎') + '</span>';
+    chip.innerHTML = thumb +
+      '<span class="file-chip-name">' + escapeHtml(f.name) + '</span>' +
+      '<span class="file-chip-size">' + formatFileSize(f.size) + '</span>' +
+      '<button class="file-chip-remove" onclick="removeFile(' + i + ')">×</button>';
+    container.appendChild(chip);
+  });
+}
+
+function removeFile(idx) {
+  if (pendingFiles[idx] && pendingFiles[idx].preview) URL.revokeObjectURL(pendingFiles[idx].preview);
+  pendingFiles.splice(idx, 1);
+  renderFileChips();
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+}
+
+async function uploadPendingFiles() {
+  if (pendingFiles.length === 0) return [];
+  const payload = { files: pendingFiles.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.base64 })) };
+  const res = await fetch(API + '/v1/files/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '文件上传失败');
+  }
+  const data = await res.json();
+  return data.files; // [{ fileId, name, mimeType, size, category }]
+}
+
+// 灯箱
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+// 渲染消息中的附件
+function renderAttachments(fileIds, uploadedFiles) {
+  if (!fileIds || fileIds.length === 0) return '';
+  let html = '<div class="msg-attachments">';
+  for (let i = 0; i < fileIds.length; i++) {
+    const f = uploadedFiles && uploadedFiles[i];
+    const fid = fileIds[i];
+    const url = API + '/v1/files/' + fid + '?token=' + encodeURIComponent(token);
+    if (f && f.category === 'image') {
+      html += '<img class="msg-attach-img" src="' + url + '" onclick="openLightbox(this.src)" title="' + escapeHtml(f.name || '') + '">';
+    } else {
+      const icon = f ? (FILE_ICONS[f.category] || '📎') : '📎';
+      const name = f ? escapeHtml(f.name) : fid;
+      html += '<a class="msg-attach" href="' + url + '" target="_blank">' + icon + ' ' + name + '</a>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── #4 聊天历史持久化 ──
+function saveChatHistory() {
+  try { localStorage.setItem('bw_chat_history', JSON.stringify(chatHistory.slice(-100))); } catch {}
+}
+
+function restoreChatHistory() {
+  if (chatHistory.length === 0) return;
+  const welcome = document.getElementById('chatWelcome');
+  if (welcome) welcome.style.display = 'none';
+  for (const msg of chatHistory) {
+    appendMsg(msg.role, msg.content);
+  }
+}
+
+function clearChatHistory() {
+  chatHistory = [];
+  localStorage.removeItem('bw_chat_history');
+  const inner = document.getElementById('chatFeedInner');
+  inner.innerHTML = '';
+  const welcome = document.getElementById('chatWelcome');
+  if (welcome) welcome.style.display = '';
+  toast('对话已清空', 'success');
+}
+
+// ── #2 技能路由标签 (输入时实时检测) ──
+let _skillRouteTimer = null;
+let _lastSuggestedModel = null;
+
+function onInputSkillRoute() {
+  clearTimeout(_skillRouteTimer);
+  const text = document.getElementById('chatInput').value.trim();
+  if (text.length < 4) {
+    document.getElementById('skillPill').classList.remove('visible');
+    document.getElementById('modelSuggest').classList.remove('visible');
+    return;
+  }
+  _skillRouteTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(API + '/v1/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ text: text }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const pill = document.getElementById('skillPill');
+      if (data.primary && data.confidence >= 0.5) {
+        document.getElementById('skillPillName').textContent = data.primary;
+        pill.classList.add('visible');
+      } else {
+        pill.classList.remove('visible');
+      }
+      // #7 模型推荐
+      const sugEl = document.getElementById('modelSuggest');
+      if (data.suggestedModel && data.suggestedModel.model !== selectedModel) {
+        _lastSuggestedModel = data.suggestedModel;
+        document.getElementById('suggestText').textContent = '💡 ' + data.suggestedModel.reason;
+        sugEl.classList.add('visible');
+      } else {
+        sugEl.classList.remove('visible');
+      }
+    } catch {}
+  }, 600);
+}
+
+// #7 应用模型推荐
+function applyModelSuggestion() {
+  if (!_lastSuggestedModel) return;
+  const m = _lastSuggestedModel.model;
+  // 找到对应 provider 和模型
+  for (const [prov, cfg] of Object.entries(PROVIDERS)) {
+    const found = cfg.models.find(mod => mod.id === m);
+    if (found) {
+      selectedProvider = prov;
+      selectedModel = m;
+      renderProviders();
+      updateChatHeader();
+      toast('已切换到 ' + found.label, 'success');
+      break;
+    }
+  }
+  document.getElementById('modelSuggest').classList.remove('visible');
+}
+
+// ── #5 代码粘贴检测 ──
+function onChatPaste(e) {
+  const pasted = (e.clipboardData || window.clipboardData).getData('text');
+  if (!pasted) return;
+  // 检测是否像代码: 包含常见代码特征
+  const codeSignals = /[{};=>\[\]()]/.test(pasted) && pasted.split('\n').length >= 3;
+  if (codeSignals && !pasted.startsWith('```')) {
+    e.preventDefault();
+    const input = document.getElementById('chatInput');
+    const lang = detectLang(pasted);
+    const wrapped = '```' + lang + '\n' + pasted + '\n```\n';
+    const start = input.selectionStart;
+    input.value = input.value.slice(0, start) + wrapped + input.value.slice(input.selectionEnd);
+    input.selectionStart = input.selectionEnd = start + wrapped.length;
+    autoResizeTextarea();
+    toast('已自动包裹为代码块', 'info');
+  }
+}
+
+function detectLang(code) {
+  if (/\bdef\s+\w+|import\s+\w+|from\s+\w+/.test(code)) return 'python';
+  if (/\bfunction\b|const\s+\w+|=>\s*{|require\(/.test(code)) return 'javascript';
+  if (/\binterface\b|:\s*(string|number|boolean)/.test(code)) return 'typescript';
+  if (/<\w+[^>]*>/.test(code) && /<\/\w+>/.test(code)) return 'html';
+  if (/\{[\s\S]*:\s*[\w#]/.test(code) && /;\s*\}/.test(code)) return 'css';
+  if (/\bfunc\s+\w+|package\s+\w+/.test(code)) return 'go';
+  if (/\bfn\s+\w+|let\s+mut\b/.test(code)) return 'rust';
+  return '';
+}
+
+// ── #8 代码沙箱预览 ──
+function renderMarkdownWithSandbox(text) {
+  let html = renderMarkdown(text);
+  // 在 HTML 代码块后添加预览按钮
+  html = html.replace(/<pre data-lang="html"><code>([\s\S]*?)<\/code><\/pre>/g, (match, code) => {
+    const id = 'sandbox_' + Math.random().toString(36).slice(2, 8);
+    const decoded = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+    return match + '<div class="code-sandbox-btn" onclick="toggleSandbox(this,\'' + id + '\')">▶ 预览 HTML</div>' +
+      '<iframe class="code-sandbox-frame" id="' + id + '" style="display:none" sandbox="allow-scripts"></iframe>' +
+      '<script type="text/template" id="' + id + '_src">' + decoded + '<\/script>';
+  });
+  return html;
+}
+
+function toggleSandbox(btn, id) {
+  const frame = document.getElementById(id);
+  const src = document.getElementById(id + '_src');
+  if (!frame || !src) return;
+  if (frame.style.display === 'none') {
+    frame.style.display = 'block';
+    frame.srcdoc = src.textContent;
+    btn.textContent = '⏹ 关闭预览';
+  } else {
+    frame.style.display = 'none';
+    frame.srcdoc = '';
+    btn.textContent = '▶ 预览 HTML';
+  }
+}
+
+// ── #10 用量仪表盘 ──
+async function loadUsageDashboard() {
+  const { status, data } = await api('GET', '/v1/me/usage?days=30');
+  const dashboard = document.getElementById('usageDashboard');
+  if (status !== 200 || !data.ok) {
+    dashboard.style.display = 'none';
+    const el = document.getElementById('usageData');
+    el.style.display = 'block';
+    el.textContent = (data && data.error) || '加载失败';
+    return;
+  }
+  dashboard.style.display = 'block';
+  const usage = data.usage || [];
+  if (usage.length === 0) {
+    dashboard.innerHTML = '<p style="color:var(--text-3);text-align:center;padding:20px">暂无用量数据</p>';
+    return;
+  }
+  // 汇总
+  let totalReq = 0, totalIn = 0, totalOut = 0;
+  for (const d of usage) { totalReq += d.requests; totalIn += d.total_tokens_in; totalOut += d.total_tokens_out; }
+  document.getElementById('usageSummary').innerHTML =
+    '<div class="usage-stat"><div class="usage-stat-val">' + totalReq + '</div><div class="usage-stat-label">请求数</div></div>' +
+    '<div class="usage-stat"><div class="usage-stat-val">' + (totalIn / 1000).toFixed(1) + 'K</div><div class="usage-stat-label">输入 Tokens</div></div>' +
+    '<div class="usage-stat"><div class="usage-stat-val">' + (totalOut / 1000).toFixed(1) + 'K</div><div class="usage-stat-label">输出 Tokens</div></div>';
+  // 柱状图 (按日期, 最多显示最近14天)
+  const recent = usage.slice(0, 14).reverse();
+  const maxReq = Math.max(...recent.map(d => d.requests), 1);
+  document.getElementById('usageChart').innerHTML = recent.map(d =>
+    '<div class="usage-bar-wrap">' +
+    '<div class="usage-bar" style="height:' + Math.max((d.requests / maxReq) * 80, 2) + 'px" title="' + d.requests + ' 请求"></div>' +
+    '<div class="usage-bar-label">' + d.date.slice(5) + '</div></div>'
+  ).join('');
+}
+
+// ── 套餐 & 配额 ──
+async function loadPricing() {
+  const container = document.getElementById('pricingTiers');
+  container.innerHTML = '<span style="color:var(--text-3)">加载中...</span>';
+
+  // 获取套餐列表 (公开)
+  try {
+    const res = await fetch(API + '/v1/tiers');
+    const data = await res.json();
+    if (!data.ok || !data.tiers) { container.innerHTML = '<span style="color:var(--error)">加载失败</span>'; return; }
+
+    // 获取当前用户套餐
+    let currentTier = 'free';
+    if (token) {
+      const me = await api('GET', '/v1/me/quota');
+      if (me.status === 200) currentTier = me.data.tier?.id || 'free';
+    }
+
+    const featureLabels = {
+      basic_chat: '基础对话', skill_routing: '智能路由', file_upload: '文件上传',
+      advanced_analysis: '高级分析', context_memory: '上下文记忆', priority_routing: '优先路由',
+      dedicated_support: '专属支持', api_access: 'API 访问',
+    };
+
+    let html = '<div class="pricing-grid">';
+    for (const t of data.tiers) {
+      const isCurrent = t.id === currentTier;
+      const isPopular = t.id === 'pro';
+      html += `<div class="pricing-tier${isCurrent ? ' current' : ''}${isPopular ? ' popular' : ''}">
+        <div class="tier-name">${t.name}</div>
+        <div class="tier-price">
+          <span class="amount">${t.price === 0 ? '免费' : '¥' + t.price}</span>
+          ${t.price > 0 ? '<span class="unit">/月</span>' : ''}
+        </div>
+        <div class="tier-cost">云成本 ¥${t.cloud_cost_monthly}/月 (透明定价)</div>
+        <div class="tier-features">
+          <li>存储 ${t.storage_gb}GB</li>
+          <li>记忆 ${t.memory_days === -1 ? '永久' : t.memory_days + '天'}</li>
+          <li>项目 ${t.projects === -1 ? '无限' : t.projects + '个'}</li>
+          <li>每日对话 ${t.daily_chats === -1 ? '无限' : t.daily_chats + '次'}</li>
+          <li>附件 ${t.files_per_msg} 个/条, 单个 ${t.max_file_mb}MB</li>
+          ${t.features.map(f => `<li>${featureLabels[f] || f}</li>`).join('')}
+        </div>
+        ${isCurrent
+          ? '<button class="btn btn-secondary tier-btn" disabled>当前套餐</button>'
+          : `<button class="btn ${isPopular ? 'btn-primary' : 'btn-secondary'} tier-btn" onclick="upgradeTier('${t.id}')">${t.price > 0 ? '升级' : '切换'}到${t.name}</button>`
+        }
+      </div>`;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    // 同时加载配额
+    loadQuota();
+  } catch (e) {
+    container.innerHTML = '<span style="color:var(--error)">网络错误</span>';
+  }
+}
+
+async function loadQuota() {
+  if (!token) return;
+  const card = document.getElementById('quotaCard');
+  const info = document.getElementById('quotaInfo');
+  const { status, data } = await api('GET', '/v1/me/quota');
+  if (status !== 200) return;
+
+  card.style.display = '';
+  const s = data.storage;
+  const c = data.dailyChats;
+  const sPct = s.limit_mb > 0 ? Math.min(100, (s.used_mb / s.limit_mb) * 100) : 0;
+  const cPct = c.limit === -1 ? 0 : Math.min(100, (c.used / c.limit) * 100);
+  const sClass = sPct > 90 ? 'danger' : sPct > 70 ? 'warn' : 'ok';
+  const cClass = cPct > 90 ? 'danger' : cPct > 70 ? 'warn' : 'ok';
+
+  info.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span class="tier-badge badge-${data.tier.id}">${data.tier.name}</span>
+      <span style="font-size:12px;color:var(--text-3)">¥${data.tier.price}/月</span>
+    </div>
+    <div class="quota-bars">
+      <div class="quota-item">
+        <label>存储空间</label>
+        <div class="quota-bar-bg"><div class="quota-bar-fill ${sClass}" style="width:${sPct}%"></div></div>
+        <div class="quota-nums"><span>${s.used_mb}MB 已用</span><span>${s.limit_mb}MB 总量</span></div>
+      </div>
+      <div class="quota-item">
+        <label>今日对话</label>
+        ${c.limit === -1
+          ? '<div style="font-size:13px;color:var(--success)">无限制 (' + c.used + ' 次已用)</div>'
+          : `<div class="quota-bar-bg"><div class="quota-bar-fill ${cClass}" style="width:${cPct}%"></div></div>
+             <div class="quota-nums"><span>${c.used} 次已用</span><span>${c.limit} 次上限</span></div>`
+        }
+      </div>
+      <div class="quota-item">
+        <label>附件限制</label>
+        <div style="font-size:13px;color:var(--text-2)">${data.limits.files_per_msg} 个/消息, 单个最大 ${data.limits.max_file_mb}MB</div>
+      </div>
+      <div class="quota-item">
+        <label>记忆保留</label>
+        <div style="font-size:13px;color:var(--text-2)">${data.limits.memory_days === -1 ? '永久保留' : data.limits.memory_days + ' 天'}</div>
+      </div>
+    </div>`;
+}
+
+async function upgradeTier(tierId) {
+  if (!token) { toast('请先登录', 'error'); switchTab('settings'); return; }
+
+  // 免费套餐直接切换
+  if (tierId === 'free') {
+    const { status, data } = await api('POST', '/v1/me/tier', { tier: tierId });
+    if (status === 200) { toast(data.message, 'success'); loadPricing(); loadProfile(); }
+    else toast(data.error || '操作失败', 'error');
+    return;
+  }
+
+  // 付费套餐 → 走支付流程
+  showPaymentModal(tierId);
+}
+
+function showPaymentModal(tierId) {
+  // 创建支付弹窗
+  let modal = document.getElementById('payModal');
+  if (modal) modal.remove();
+  const tierNames = { pro: '专业版 ¥29/月', team: '团队版 ¥79/月' };
+  modal = document.createElement('div');
+  modal.id = 'payModal';
+  modal.className = 'lightbox open';
+  modal.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)';
+  modal.innerHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border-d);border-radius:var(--radius-lg);padding:32px;max-width:380px;width:90%;text-align:center">
+    <h3 style="color:var(--text-1);margin-bottom:8px">升级到${tierNames[tierId] || tierId}</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:20px">选择支付方式</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" onclick="doPayment('${tierId}','alipay')" style="width:100%">支付宝</button>
+      <button class="btn btn-secondary" onclick="doPayment('${tierId}','wechat')" style="width:100%">微信支付</button>
+      <button class="btn btn-ghost" onclick="doPayment('${tierId}','mock')" style="width:100%;font-size:12px;color:var(--text-3)">模拟支付 (测试)</button>
+    </div>
+    <button class="btn btn-ghost" onclick="document.getElementById('payModal').remove()" style="margin-top:16px;width:100%">取消</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function doPayment(tierId, method) {
+  const modal = document.getElementById('payModal');
+  if (method === 'mock') {
+    // 模拟: 直接调 tier change (开发模式)
+    const { status, data } = await api('POST', '/v1/me/tier', { tier: tierId });
+    if (modal) modal.remove();
+    if (status === 200) { toast(data.message, 'success'); loadPricing(); loadProfile(); }
+    else toast(data.error || '操作失败', 'error');
+    return;
+  }
+
+  // 创建支付订单
+  const { status, data } = await api('POST', '/v1/payment/create', { tier: tierId, payMethod: method });
+  if (status !== 200) { toast(data.error || '创建订单失败', 'error'); return; }
+
+  if (data.payment?.type === 'redirect' && data.payment.url) {
+    if (modal) modal.remove();
+    // 跳转支付 / 模拟支付
+    if (data.payment.url.startsWith('/')) {
+      window.open(API + data.payment.url, '_blank');
+      toast('请在新窗口完成支付，完成后刷新页面', 'info');
+      // 轮询订单状态
+      pollOrderStatus(data.order.orderId);
+    } else {
+      window.location.href = data.payment.url;
+    }
+  } else {
+    toast(data.payment?.message || '支付方式暂未接入', 'info');
+    if (modal) modal.remove();
+  }
+}
+
+async function pollOrderStatus(orderId) {
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 60) { clearInterval(poll); return; } // 5分钟超时
+    const { status, data } = await api('GET', '/v1/payment/status?orderId=' + orderId);
+    if (status === 200 && (data.order.status === 'activated' || data.order.status === 'paid')) {
+      clearInterval(poll);
+      toast('支付成功，套餐已激活', 'success');
+      loadPricing();
+      loadProfile();
+    }
+  }, 5000);
 }
 
 // ── 初始化 ──
 (async () => {
   renderProviders();
   updateChatHeader();
+  restoreChatHistory(); // #4 恢复上次对话
 
   try {
     const res = await fetch(API + '/health');

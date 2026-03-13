@@ -83,6 +83,9 @@ async function createUser(email, passwordHash) {
       email,
       password: passwordHash,
       api_key_enc: null,
+      tier: 'free',
+      storage_used_bytes: 0,
+      tier_expires_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -101,7 +104,58 @@ function findUserById(id) {
   const users = loadUsers();
   const u = users.find(u => u.id === id);
   if (!u) return null;
-  return { id: u.id, email: u.email, api_key_enc: u.api_key_enc, created_at: u.created_at };
+  return {
+    id: u.id, email: u.email, api_key_enc: u.api_key_enc,
+    tier: u.tier || 'free',
+    storage_used_bytes: u.storage_used_bytes || 0,
+    tier_expires_at: u.tier_expires_at || null,
+    created_at: u.created_at,
+  };
+}
+
+// ─── 套餐 & 存储 ───
+
+async function updateUserTier(userId, newTier, expiresAt) {
+  return withWriteLock(() => {
+    const users = loadUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user) return false;
+    user.tier = newTier;
+    user.tier_expires_at = expiresAt || null;
+    user.updated_at = new Date().toISOString();
+    saveUsers(users);
+    return true;
+  });
+}
+
+async function updateStorageUsed(userId, deltaBytes) {
+  return withWriteLock(() => {
+    const users = loadUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user) return 0;
+    user.storage_used_bytes = Math.max(0, (user.storage_used_bytes || 0) + deltaBytes);
+    user.updated_at = new Date().toISOString();
+    saveUsers(users);
+    return user.storage_used_bytes;
+  });
+}
+
+function getTodayChatCount(userId) {
+  const todayFile = getUsageFile();
+  if (!fs.existsSync(todayFile)) return 0;
+  let count = 0;
+  try {
+    const lines = fs.readFileSync(todayFile, 'utf8').trim().split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.user_id === userId && (entry.endpoint === '/v1/chat' || entry.endpoint === '/v1/chat/stream')) {
+          count++;
+        }
+      } catch { /* skip */ }
+    }
+  } catch { /* file read error */ }
+  return count;
 }
 
 async function updateApiKey(userId, encryptedKey, provider) {
@@ -193,22 +247,33 @@ function listAllUsers() {
     id: u.id,
     email: u.email,
     hasApiKey: !!u.api_key_enc,
+    tier: u.tier || 'free',
+    storage_used_bytes: u.storage_used_bytes || 0,
     createdAt: u.created_at,
   }));
 }
 
 function getSystemStats() {
   const users = loadUsers();
-  // 统计今日用量
   const todayFile = getUsageFile();
   let todayRequests = 0;
   if (fs.existsSync(todayFile)) {
     todayRequests = fs.readFileSync(todayFile, 'utf8').trim().split('\n').filter(Boolean).length;
   }
+  // 套餐分布统计
+  const tierDist = { free: 0, pro: 0, team: 0 };
+  let totalStorage = 0;
+  for (const u of users) {
+    const t = u.tier || 'free';
+    tierDist[t] = (tierDist[t] || 0) + 1;
+    totalStorage += u.storage_used_bytes || 0;
+  }
   return {
     totalUsers: users.length,
     usersWithApiKey: users.filter(u => !!u.api_key_enc).length,
     todayRequests,
+    tierDistribution: tierDist,
+    totalStorageUsed: totalStorage,
   };
 }
 
@@ -221,6 +286,9 @@ module.exports = {
   findUserByEmail,
   findUserById,
   updateApiKey,
+  updateUserTier,
+  updateStorageUsed,
+  getTodayChatCount,
   logUsage,
   getUserUsage,
   listAllUsers,
