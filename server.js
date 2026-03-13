@@ -147,7 +147,9 @@ const MIME_TYPES = {
 };
 
 function serveStatic(req, res) {
-  let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'index.html' : req.url);
+  // 剥离 query string，避免 /?_v=2 无法匹配静态文件
+  const cleanUrl = req.url.split('?')[0];
+  let filePath = path.join(PUBLIC_DIR, cleanUrl === '/' ? 'index.html' : cleanUrl);
   // 安全: 防止路径穿越
   filePath = path.normalize(filePath);
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -160,10 +162,12 @@ function serveStatic(req, res) {
   const ext = path.extname(filePath);
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
   const content = fs.readFileSync(filePath);
+  // HTML 不缓存 (确保用户总是拿到最新版), 其他静态资源缓存 1h
+  const cacheControl = ext === '.html' ? 'no-cache, no-store, must-revalidate' : 'public, max-age=3600';
   res.writeHead(200, {
     'Content-Type': contentType,
     'Content-Length': content.length,
-    'Cache-Control': 'public, max-age=3600',
+    'Cache-Control': cacheControl,
     ...corsHeaders(),
   });
   res.end(content);

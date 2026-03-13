@@ -122,13 +122,16 @@ body { font-family: var(--font-sans); color: var(--text-1); background: var(--bg
 /* ============================================
    LAYOUT — Main Area
    ============================================ */
-.app { display: flex; height: calc(100vh - var(--nav-h)); margin-top: var(--nav-h); }
+.app {
+  position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0;
+  display: flex; overflow: hidden;
+}
 
 /* ── Provider Sidebar ── */
 .sidebar {
   width: var(--sidebar-w); flex-shrink: 0; display: flex; flex-direction: column;
   background: var(--bg-elevated); border-right: 1px solid var(--border-s);
-  transition: width var(--t-slow); overflow: hidden;
+  transition: width var(--t-slow); overflow: hidden; min-height: 0;
 }
 .sidebar.collapsed { width: 0; border-right: none; }
 
@@ -206,6 +209,7 @@ body { font-family: var(--font-sans); color: var(--text-1); background: var(--bg
 /* Base URL section */
 .sidebar-base {
   flex-shrink: 0; padding: 12px 14px; border-top: 1px solid var(--border-s);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
 }
 .base-label { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
 .base-input {
@@ -220,9 +224,9 @@ body { font-family: var(--font-sans); color: var(--text-1); background: var(--bg
 /* ============================================
    MAIN CONTENT PANELS
    ============================================ */
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg-base); position: relative; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-base); position: relative; }
 
-.panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.panel { display: none; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
 .panel.active { display: flex; animation: fadeIn 200ms var(--ease) both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -428,7 +432,10 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 .chat-welcome p { font-size: 13px; max-width: 400px; text-align: center; line-height: 1.6; }
 
 /* Input Area */
-.chat-input-area { flex-shrink: 0; padding: 12px 20px 20px; background: var(--bg-base); }
+.chat-input-area {
+  flex-shrink: 0; padding: 12px 20px; background: var(--bg-base);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+}
 .chat-input-inner { max-width: 800px; margin: 0 auto; }
 .chat-input-box {
   display: flex; flex-direction: column;
@@ -763,6 +770,7 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
 // ═══════════════════════════════════════════════
 // Bookworm Frontend — Multi-LLM BYOK Chat
 // ═══════════════════════════════════════════════
+
 const API = location.origin;
 let token = localStorage.getItem('bw_token') || '';
 let refreshToken = localStorage.getItem('bw_refresh') || '';
