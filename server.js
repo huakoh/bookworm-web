@@ -402,6 +402,24 @@ routes['POST:/v1/chat'] = async (req, res) => {
   const providerName = detectProvider(model);
   const startMs = Date.now();
 
+  // ─── 技能 System Prompt 自动注入 ───
+  let systemPrompt = body.system || '';
+  if (!systemPrompt && body.messages && body.messages.length > 0) {
+    const lastUserMsg = [...body.messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      try {
+        const routeResult = route(typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '');
+        if (routeResult.primary && routeResult.confidence >= 0.5) {
+          const skill = listSkills().find(s => s.name === routeResult.primary);
+          if (skill && skill.description) {
+            systemPrompt = `你是 ${skill.name} 专家。${skill.description}\n请用中文回复，先给代码再解释。`;
+            log('info', '技能注入', { userId, skill: routeResult.primary, confidence: routeResult.confidence });
+          }
+        }
+      } catch { /* 路由失败不阻塞对话 */ }
+    }
+  }
+
   if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'false' });
 
   if (providerName === 'anthropic' && !body.base_url && !body.baseUrl) {
@@ -412,7 +430,7 @@ routes['POST:/v1/chat'] = async (req, res) => {
       maxTokens: body.max_tokens || body.maxTokens,
       stream: false,
       baseUrl: body.base_url || body.baseUrl,
-      systemPrompt: body.system,
+      systemPrompt,
     }, res);
 
     const latencyMs = Date.now() - startMs;
@@ -433,7 +451,7 @@ routes['POST:/v1/chat'] = async (req, res) => {
       messages: body.messages,
       maxTokens: body.max_tokens || body.maxTokens,
       stream: false,
-      systemPrompt: body.system,
+      systemPrompt,
     });
 
     const result = await sendLLMRequest(
@@ -462,6 +480,25 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
   const providerName = detectProvider(model);
   const startMs = Date.now();
 
+  // ─── 技能 System Prompt 自动注入 ───
+  // 如果用户没有手动指定 system prompt，从最后一条用户消息自动路由到最佳技能
+  let systemPrompt = body.system || '';
+  if (!systemPrompt && body.messages && body.messages.length > 0) {
+    const lastUserMsg = [...body.messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      try {
+        const routeResult = route(typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '');
+        if (routeResult.primary && routeResult.confidence >= 0.5) {
+          const skill = listSkills().find(s => s.name === routeResult.primary);
+          if (skill && skill.description) {
+            systemPrompt = `你是 ${skill.name} 专家。${skill.description}\n请用中文回复，先给代码再解释。`;
+            log('info', '技能注入', { userId, skill: routeResult.primary, confidence: routeResult.confidence });
+          }
+        }
+      } catch { /* 路由失败不阻塞对话 */ }
+    }
+  }
+
   if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'true' });
 
   log('info', 'Chat 流式开始', { userId, model, provider: providerName });
@@ -473,7 +510,7 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
       maxTokens: body.max_tokens || body.maxTokens,
       stream: true,
       baseUrl: body.base_url || body.baseUrl,
-      systemPrompt: body.system,
+      systemPrompt,
     }, res);
 
     const latencyMs = Date.now() - startMs;
@@ -489,7 +526,7 @@ routes['POST:/v1/chat/stream'] = async (req, res) => {
       messages: body.messages,
       maxTokens: body.max_tokens || body.maxTokens,
       stream: true,
-      systemPrompt: body.system,
+      systemPrompt,
     });
 
     const result = await sendLLMRequest(
