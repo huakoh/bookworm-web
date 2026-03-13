@@ -270,10 +270,20 @@ routes['POST:/v1/token/refresh'] = async (req, res) => {
 routes['GET:/v1/me'] = async (req, res) => {
   const userId = requireAuth(req);
   const user = findUserById(userId);
+  // 返回各 provider 的 API Key 配置状态
+  let apiKeys = {};
+  if (user.api_key_enc && typeof user.api_key_enc === 'object') {
+    for (const [prov, enc] of Object.entries(user.api_key_enc)) {
+      apiKeys[prov] = !!enc;
+    }
+  } else if (user.api_key_enc) {
+    apiKeys = { anthropic: true };
+  }
   json(res, 200, {
     id: user.id,
     email: user.email,
-    hasApiKey: !!user.api_key_enc,
+    hasApiKey: Object.values(apiKeys).some(v => v),
+    apiKeys,
     createdAt: user.created_at,
   });
 };
@@ -281,18 +291,19 @@ routes['GET:/v1/me'] = async (req, res) => {
 routes['PUT:/v1/me/key'] = async (req, res) => {
   const userId = requireAuth(req);
   const body = await parseJsonBody(req);
-  const { apiKey } = body;
+  const { apiKey, provider } = body;
 
   if (!apiKey) throw { status: 400, message: '缺少 apiKey 字段' };
-  // 支持多 provider 的 API Key 格式
-  if (!apiKey.startsWith('sk-')) {
-    throw { status: 400, message: 'API Key 格式错误，应以 sk- 开头' };
-  }
+  if (apiKey.length < 8) throw { status: 400, message: 'API Key 太短' };
+
+  // 验证 provider (可选)
+  const validProviders = ['anthropic', 'openai', 'qwen', 'deepseek'];
+  const prov = provider && validProviders.includes(provider) ? provider : null;
 
   const encrypted = encrypt(apiKey);
-  await updateApiKey(userId, encrypted);
-  log('info', 'API Key 更新', { userId });
-  json(res, 200, { ok: true, message: 'API Key 已安全加密存储' });
+  await updateApiKey(userId, encrypted, prov);
+  log('info', 'API Key 更新', { userId, provider: prov || 'default' });
+  json(res, 200, { ok: true, provider: prov || 'default', message: 'API Key 已安全加密存储' });
 };
 
 routes['GET:/v1/me/usage'] = async (req, res) => {
@@ -352,14 +363,28 @@ async function resolveApiKey(userId, body) {
   // 优先用请求中传入的 Key (即时 BYOK)
   if (body.apiKey || body.api_key) {
     const key = body.apiKey || body.api_key;
-    if (!key.startsWith('sk-')) throw { status: 400, message: 'API Key 格式错误' };
+    if (key.length < 8) throw { status: 400, message: 'API Key 格式错误' };
     return key;
   }
   // 否则用已存储的加密 Key
   const user = findUserById(userId);
   if (!user?.api_key_enc) {
-    throw { status: 400, message: '未配置 API Key，请先调用 PUT /v1/me/key 或在请求中传入 apiKey' };
+    throw { status: 400, message: '未配置 API Key，请先在设置中保存 API Key' };
   }
+
+  // 多 Provider Key: 根据 model 自动选择对应 provider 的 key
+  const model = body.model || '';
+  const providerName = detectProvider(model);
+
+  if (typeof user.api_key_enc === 'object' && user.api_key_enc !== null) {
+    // 优先取对应 provider 的 key，回退到 anthropic 或第一个可用 key
+    const key = user.api_key_enc[providerName]
+      || user.api_key_enc.anthropic
+      || Object.values(user.api_key_enc).find(v => v);
+    if (!key) throw { status: 400, message: `未配置 ${providerName} 的 API Key` };
+    return decrypt(key);
+  }
+  // 兼容旧格式 (单字符串)
   return decrypt(user.api_key_enc);
 }
 

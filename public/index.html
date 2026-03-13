@@ -707,8 +707,16 @@ textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--fon
               <svg class="icon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
               API Key 管理
             </div>
-            <label class="form-label">API Key (支持所有 Provider)</label>
-            <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-ant-... / sk-... / sk-..." style="font-family:var(--font-mono);font-size:12px">
+            <label class="form-label">选择 LLM Provider</label>
+            <select class="form-input" id="keyProviderSelect" onchange="onKeyProviderChange()" style="cursor:pointer;margin-bottom:10px">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI (GPT)</option>
+              <option value="qwen">Qwen 通义 (DashScope)</option>
+              <option value="deepseek">DeepSeek</option>
+            </select>
+            <label class="form-label" id="keyLabel">Anthropic API Key</label>
+            <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-..." style="font-family:var(--font-mono);font-size:12px">
+            <div id="keyStatusRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
             <div class="btn-row">
               <button class="btn btn-primary" onclick="saveApiKey()">保存到服务器 (AES-256 加密)</button>
               <button class="btn btn-ghost" onclick="toggleVis('apiKeyInput')">显示/隐藏</button>
@@ -1037,6 +1045,7 @@ async function loadProfile() {
   if (status === 200) {
     updateAuth(data.email);
     document.getElementById('userInfo').textContent = JSON.stringify(data, null, 2);
+    renderKeyStatus(data.apiKeys);
   }
 }
 
@@ -1270,11 +1279,50 @@ function autoResizeTextarea() {
 }
 
 // ── 设置 ──
+const KEY_PLACEHOLDERS = {
+  anthropic: 'sk-ant-api03-...',
+  openai: 'sk-proj-...',
+  qwen: 'sk-... (DashScope API Key)',
+  deepseek: 'sk-...',
+};
+const KEY_LABELS = {
+  anthropic: 'Anthropic API Key',
+  openai: 'OpenAI API Key',
+  qwen: 'Qwen / DashScope API Key',
+  deepseek: 'DeepSeek API Key',
+};
+
+function onKeyProviderChange() {
+  const prov = document.getElementById('keyProviderSelect').value;
+  document.getElementById('apiKeyInput').placeholder = KEY_PLACEHOLDERS[prov] || 'API Key';
+  document.getElementById('keyLabel').textContent = KEY_LABELS[prov] || 'API Key';
+}
+
+function renderKeyStatus(apiKeys) {
+  const row = document.getElementById('keyStatusRow');
+  if (!row) return;
+  const provNames = { anthropic: 'Anthropic', openai: 'OpenAI', qwen: 'Qwen', deepseek: 'DeepSeek' };
+  row.innerHTML = Object.entries(provNames).map(([k, label]) => {
+    const ok = apiKeys && apiKeys[k];
+    return `<span style="font-size:11px;padding:3px 8px;border-radius:var(--radius-full);
+      background:${ok ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)'};
+      border:1px solid ${ok ? 'rgba(52,211,153,0.25)' : 'var(--border-d)'};
+      color:${ok ? 'var(--success)' : 'var(--text-3)'}">${ok ? '✓' : '○'} ${label}</span>`;
+  }).join('');
+}
+
 async function saveApiKey() {
   const apiKey = document.getElementById('apiKeyInput').value;
+  const provider = document.getElementById('keyProviderSelect').value;
   if (!apiKey) return toast('请输入 API Key', 'error');
-  const { status, data } = await api('PUT', '/v1/me/key', { apiKey });
-  toast(status === 200 ? 'API Key 已保存 (AES-256-GCM 加密)' : (data.error || '保存失败'), status === 200 ? 'success' : 'error');
+  const { status, data } = await api('PUT', '/v1/me/key', { apiKey, provider });
+  if (status === 200) {
+    toast(`${KEY_LABELS[provider]} 已保存 (AES-256-GCM 加密)`, 'success');
+    document.getElementById('apiKeyInput').value = '';
+    loadProfile(); // 刷新 key 状态
+  } else {
+    toast(data.error || '保存失败', 'error');
+  }
 }
 
 async function loadUsage() {

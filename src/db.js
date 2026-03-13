@@ -104,12 +104,27 @@ function findUserById(id) {
   return { id: u.id, email: u.email, api_key_enc: u.api_key_enc, created_at: u.created_at };
 }
 
-async function updateApiKey(userId, encryptedKey) {
+async function updateApiKey(userId, encryptedKey, provider) {
   return withWriteLock(() => {
     const users = loadUsers();
     const user = users.find(u => u.id === userId);
     if (user) {
-      user.api_key_enc = encryptedKey;
+      if (provider) {
+        // 多 Provider 模式: api_key_enc 为对象 { anthropic: "enc...", qwen: "enc..." }
+        if (typeof user.api_key_enc !== 'object' || user.api_key_enc === null) {
+          // 迁移: 旧的字符串格式 → 放入 anthropic 键
+          const oldKey = typeof user.api_key_enc === 'string' ? user.api_key_enc : null;
+          user.api_key_enc = oldKey ? { anthropic: oldKey } : {};
+        }
+        user.api_key_enc[provider] = encryptedKey;
+      } else {
+        // 兼容旧接口: 无 provider 时存为 anthropic
+        if (typeof user.api_key_enc === 'object' && user.api_key_enc !== null) {
+          user.api_key_enc.anthropic = encryptedKey;
+        } else {
+          user.api_key_enc = encryptedKey;
+        }
+      }
       user.updated_at = new Date().toISOString();
       saveUsers(users);
     }

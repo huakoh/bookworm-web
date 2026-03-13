@@ -138,7 +138,10 @@ function listProviders() {
 function sendLLMRequest(provider, apiKey, body, res, stream) {
   const config = PROVIDERS[provider.name || provider] || PROVIDERS.anthropic;
   const base = provider.baseUrl || config.baseUrl;
-  const url = new URL(config.pathPrefix, base);
+  // 正确拼接: baseUrl 可能包含路径前缀 (如 /compatible-mode)
+  const baseUrl = new URL(base);
+  const fullPath = baseUrl.pathname.replace(/\/$/, '') + config.pathPrefix;
+  const url = new URL(fullPath, base);
   const isHttps = url.protocol === 'https:';
 
   const payload = JSON.stringify(body);
