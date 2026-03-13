@@ -271,6 +271,153 @@ await test('❶ 拒绝无效 URL', async () => {
 });
 
 // ═══════════════════════════════════════
+// 5. login-guard 测试
+// ═══════════════════════════════════════
+console.log('\n[login-guard]');
+
+const { LoginGuard } = require('../src/login-guard');
+
+await test('未锁定时允许登录', async () => {
+  const guard = new LoginGuard(3, 60_000);
+  const result = guard.check('test@example.com');
+  assert.ok(!result.locked, '应未锁定');
+  guard.destroy();
+});
+
+await test('连续失败后锁定', async () => {
+  const guard = new LoginGuard(3, 60_000);
+  guard.recordFailure('test@example.com');
+  guard.recordFailure('test@example.com');
+  guard.recordFailure('test@example.com');
+  const result = guard.check('test@example.com');
+  assert.ok(result.locked, '3 次失败后应锁定');
+  assert.ok(result.retryAfterMs > 0, '应有重试时间');
+  guard.destroy();
+});
+
+await test('成功后重置计数', async () => {
+  const guard = new LoginGuard(3, 60_000);
+  guard.recordFailure('test@example.com');
+  guard.recordFailure('test@example.com');
+  guard.recordSuccess('test@example.com');
+  guard.recordFailure('test@example.com');
+  const result = guard.check('test@example.com');
+  assert.ok(!result.locked, '成功后重置，1 次失败不应锁定');
+  guard.destroy();
+});
+
+await test('不同邮箱独立计数', async () => {
+  const guard = new LoginGuard(2, 60_000);
+  guard.recordFailure('a@test.com');
+  guard.recordFailure('a@test.com');
+  const ra = guard.check('a@test.com');
+  const rb = guard.check('b@test.com');
+  assert.ok(ra.locked, 'a 应被锁定');
+  assert.ok(!rb.locked, 'b 不应被锁定');
+  guard.destroy();
+});
+
+await test('邮箱大小写不敏感', async () => {
+  const guard = new LoginGuard(2, 60_000);
+  guard.recordFailure('Test@Example.COM');
+  guard.recordFailure('test@example.com');
+  const result = guard.check('TEST@EXAMPLE.COM');
+  assert.ok(result.locked, '大小写应统一处理');
+  guard.destroy();
+});
+
+// ═══════════════════════════════════════
+// 6. metrics 测试
+// ═══════════════════════════════════════
+console.log('\n[metrics]');
+
+const { Metrics } = require('../src/metrics');
+
+await test('计数器递增', async () => {
+  const m = new Metrics();
+  m.incCounter('http_requests_total', { method: 'GET', path: '/', status: '200' });
+  m.incCounter('http_requests_total', { method: 'GET', path: '/', status: '200' });
+  const output = m.serialize();
+  assert.ok(output.includes('http_requests_total{method="GET",path="/",status="200"} 2'), '计数应为 2');
+});
+
+await test('直方图观测', async () => {
+  const m = new Metrics();
+  m.observeHistogram('http_request_duration_ms', { method: 'GET', path: '/' }, 50);
+  m.observeHistogram('http_request_duration_ms', { method: 'GET', path: '/' }, 150);
+  const output = m.serialize();
+  assert.ok(output.includes('http_request_duration_ms_count'), '应有 _count');
+  assert.ok(output.includes('http_request_duration_ms_sum'), '应有 _sum');
+  assert.ok(output.includes('_bucket'), '应有 _bucket');
+});
+
+await test('仪表盘设置', async () => {
+  const m = new Metrics();
+  m.setGauge('uptime_seconds', 42);
+  const output = m.serialize();
+  assert.ok(output.includes('uptime_seconds 42'), '应设置值为 42');
+});
+
+await test('serialize 输出 Prometheus 格式', async () => {
+  const m = new Metrics();
+  const output = m.serialize();
+  assert.ok(output.includes('# HELP'), '应有 HELP 行');
+  assert.ok(output.includes('# TYPE'), '应有 TYPE 行');
+  assert.ok(output.endsWith('\n'), '应以换行结尾');
+});
+
+// ═══════════════════════════════════════
+// 7. llm-router 测试
+// ═══════════════════════════════════════
+console.log('\n[llm-router]');
+
+const { detectProvider, getProviderConfig, listProviders } = require('../src/llm-router');
+
+await test('detectProvider: claude 模型 → anthropic', async () => {
+  assert.strictEqual(detectProvider('claude-sonnet-4-5-20250514'), 'anthropic');
+  assert.strictEqual(detectProvider('claude-opus-4-6'), 'anthropic');
+});
+
+await test('detectProvider: gpt 模型 → openai', async () => {
+  assert.strictEqual(detectProvider('gpt-4o'), 'openai');
+  assert.strictEqual(detectProvider('o1-preview'), 'openai');
+});
+
+await test('detectProvider: qwen 模型 → qwen', async () => {
+  assert.strictEqual(detectProvider('qwen-turbo'), 'qwen');
+  assert.strictEqual(detectProvider('qwen3.5-plus'), 'qwen');
+});
+
+await test('detectProvider: deepseek 模型 → deepseek', async () => {
+  assert.strictEqual(detectProvider('deepseek-chat'), 'deepseek');
+  assert.strictEqual(detectProvider('deepseek-coder'), 'deepseek');
+});
+
+await test('detectProvider: 未知模型 → 默认 anthropic', async () => {
+  assert.strictEqual(detectProvider('unknown-model'), 'anthropic');
+  assert.strictEqual(detectProvider(null), 'anthropic');
+});
+
+await test('getProviderConfig 返回正确配置', async () => {
+  const config = getProviderConfig('openai');
+  assert.strictEqual(config.baseUrl, 'https://api.openai.com');
+  assert.ok(typeof config.buildBody === 'function');
+});
+
+await test('getProviderConfig 支持 baseUrl 覆盖', async () => {
+  const config = getProviderConfig('anthropic', 'https://my-proxy.com');
+  assert.strictEqual(config.baseUrl, 'https://my-proxy.com');
+});
+
+await test('listProviders 返回所有 provider', async () => {
+  const providers = listProviders();
+  assert.ok(providers.length >= 4, '应至少有 4 个 provider');
+  const names = providers.map(p => p.name);
+  assert.ok(names.includes('anthropic'));
+  assert.ok(names.includes('openai'));
+});
+
+// ═══════════════════════════════════════
 // 结果汇总
 // ═══════════════════════════════════════
 console.log(`\n${'═'.repeat(40)}`);

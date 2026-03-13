@@ -1,0 +1,11 @@
+{
+  "name": "bookworm-sdk",
+  "version": "1.0.0",
+  "description": "Bookworm Web Service SDK — 智能路由 + BYOK Chat 客户端",
+  "main": "index.js",
+  "keywords": ["bookworm", "routing", "claude", "byok", "llm"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

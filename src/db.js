@@ -116,7 +116,13 @@ async function updateApiKey(userId, encryptedKey) {
   });
 }
 
-// ─── 用量记录 (JSONL append-only) ───
+// ─── #7 用量记录 (JSONL append-only + 按日期轮转) ───
+
+function getUsageFile() {
+  // 按日期轮转: usage-2026-03-13.jsonl
+  const date = new Date().toISOString().slice(0, 10);
+  return path.join(DATA_DIR, `usage-${date}.jsonl`);
+}
 
 function logUsage(userId, endpoint, tokensIn = 0, tokensOut = 0, model = '', latencyMs = 0) {
   const entry = {
@@ -128,35 +134,67 @@ function logUsage(userId, endpoint, tokensIn = 0, tokensOut = 0, model = '', lat
     latency_ms: latencyMs,
     created_at: new Date().toISOString(),
   };
+  const file = getUsageFile();
   // 异步追加，不阻塞事件循环
-  fs.appendFile(USAGE_FILE, JSON.stringify(entry) + '\n', 'utf8', (err) => {
+  fs.appendFile(file, JSON.stringify(entry) + '\n', 'utf8', (err) => {
     if (err) process.stderr.write(`用量记录写入失败: ${err.message}\n`);
   });
 }
 
 function getUserUsage(userId, days = 30) {
-  if (!fs.existsSync(USAGE_FILE)) return [];
-
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = cutoff.toISOString();
-
-  const lines = fs.readFileSync(USAGE_FILE, 'utf8').trim().split('\n').filter(Boolean);
   const byDate = {};
 
-  for (const line of lines) {
-    try {
-      const entry = JSON.parse(line);
-      if (entry.user_id !== userId || entry.created_at < cutoffStr) continue;
-      const date = entry.created_at.slice(0, 10);
-      if (!byDate[date]) byDate[date] = { date, requests: 0, total_tokens_in: 0, total_tokens_out: 0 };
-      byDate[date].requests++;
-      byDate[date].total_tokens_in += entry.tokens_in || 0;
-      byDate[date].total_tokens_out += entry.tokens_out || 0;
-    } catch { /* 跳过损坏行 */ }
+  // 读取所有 usage 文件 (旧格式 usage.jsonl + 新格式 usage-YYYY-MM-DD.jsonl)
+  const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith('usage') && f.endsWith('.jsonl'));
+  for (const file of files) {
+    const filePath = path.join(DATA_DIR, file);
+    let content;
+    try { content = fs.readFileSync(filePath, 'utf8'); } catch { continue; }
+    const lines = content.trim().split('\n').filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.user_id !== userId || entry.created_at < cutoffStr) continue;
+        const date = entry.created_at.slice(0, 10);
+        if (!byDate[date]) byDate[date] = { date, requests: 0, total_tokens_in: 0, total_tokens_out: 0 };
+        byDate[date].requests++;
+        byDate[date].total_tokens_in += entry.tokens_in || 0;
+        byDate[date].total_tokens_out += entry.tokens_out || 0;
+      } catch { /* 跳过损坏行 */ }
+    }
   }
 
   return Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ─── #10 管理接口辅助 ───
+
+function listAllUsers() {
+  return loadUsers().map(u => ({
+    id: u.id,
+    email: u.email,
+    hasApiKey: !!u.api_key_enc,
+    createdAt: u.created_at,
+  }));
+}
+
+function getSystemStats() {
+  const users = loadUsers();
+  // 统计今日用量
+  const todayFile = getUsageFile();
+  let todayRequests = 0;
+  if (fs.existsSync(todayFile)) {
+    todayRequests = fs.readFileSync(todayFile, 'utf8').trim().split('\n').filter(Boolean).length;
+  }
+  return {
+    totalUsers: users.length,
+    usersWithApiKey: users.filter(u => !!u.api_key_enc).length,
+    todayRequests,
+  };
 }
 
 function closeDb() {
@@ -170,5 +208,7 @@ module.exports = {
   updateApiKey,
   logUsage,
   getUserUsage,
+  listAllUsers,
+  getSystemStats,
   closeDb,
 };

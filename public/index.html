@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookworm Web Service</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2d3148;
+    --text: #e4e4e7; --muted: #71717a; --accent: #6366f1;
+    --accent-hover: #818cf8; --success: #22c55e; --error: #ef4444;
+    --radius: 8px; --font: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+  .header { text-align: center; padding: 40px 0 20px; }
+  .header h1 { font-size: 1.5rem; color: var(--accent); }
+  .header p { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 10px 20px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent;
+         font-size: 0.85rem; transition: all 0.2s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+          padding: 20px; margin-bottom: 16px; }
+  .card h3 { font-size: 0.9rem; margin-bottom: 12px; color: var(--accent); }
+
+  label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+  input, textarea, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: var(--font); font-size: 0.85rem;
+    margin-bottom: 12px; outline: none; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .btn { padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: var(--radius);
+         cursor: pointer; font-family: var(--font); font-size: 0.85rem; transition: background 0.2s; }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; }
+
+  .output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 12px; font-size: 0.8rem; white-space: pre-wrap; max-height: 400px;
+            overflow-y: auto; color: var(--text); margin-top: 12px; }
+
+  .status { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 12px; }
+  .status.ok { background: #052e16; color: var(--success); }
+  .status.err { background: #450a0a; color: var(--error); }
+  .status.info { background: #1e1b4b; color: var(--accent); }
+
+  .chat-messages { max-height: 400px; overflow-y: auto; margin-bottom: 12px; }
+  .chat-msg { padding: 8px 12px; margin-bottom: 8px; border-radius: var(--radius); font-size: 0.85rem; }
+  .chat-msg.user { background: #1e1b4b; text-align: right; }
+  .chat-msg.assistant { background: #0c1a0c; }
+  .chat-input-row { display: flex; gap: 8px; }
+  .chat-input-row input { margin-bottom: 0; flex: 1; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;
+           background: var(--border); color: var(--muted); margin: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Bookworm Web Service</h1>
+    <p>BYOK Mode — Bring Your Own Key | v1.0.0</p>
+    <div id="connStatus" class="status info">未连接</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="auth">认证</div>
+    <div class="tab" data-tab="route">智能路由</div>
+    <div class="tab" data-tab="chat">Chat</div>
+    <div class="tab" data-tab="settings">设置</div>
+    <div class="tab" data-tab="admin">管理</div>
+  </div>
+
+  <!-- 认证面板 -->
+  <div id="auth" class="panel active">
+    <div class="grid-2">
+      <div class="card">
+        <h3>注册</h3>
+        <label>邮箱</label>
+        <input id="regEmail" type="email" placeholder="user@example.com">
+        <label>密码</label>
+        <input id="regPwd" type="password" placeholder="至少 8 位">
+        <button class="btn" onclick="doRegister()">注册</button>
+      </div>
+      <div class="card">
+        <h3>登录</h3>
+        <label>邮箱</label>
+        <input id="loginEmail" type="email" placeholder="user@example.com">
+        <label>密码</label>
+        <input id="loginPwd" type="password" placeholder="密码">
+        <button class="btn" onclick="doLogin()">登录</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>用户信息</h3>
+      <div id="userInfo" class="output">未登录</div>
+    </div>
+  </div>
+
+  <!-- 路由面板 -->
+  <div id="route" class="panel">
+    <div class="card">
+      <h3>智能路由分析</h3>
+      <label>输入任务描述</label>
+      <textarea id="routeText" placeholder="例如: 帮我优化 React 组件性能"></textarea>
+      <button class="btn" onclick="doRoute()">分析路由</button>
+      <div id="routeResult" class="output" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Chat 面板 -->
+  <div id="chat" class="panel">
+    <div class="card">
+      <h3>Claude Chat (BYOK)</h3>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input id="chatInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter')doChat()">
+        <select id="chatModel" style="width:180px;margin-bottom:0">
+          <option value="claude-sonnet-4-5-20250514">Sonnet 4.5</option>
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+          <option value="claude-opus-4-6">Opus 4.6</option>
+        </select>
+        <button class="btn" onclick="doChat()">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置面板 -->
+  <div id="settings" class="panel">
+    <div class="card">
+      <h3>API Key 管理</h3>
+      <label>Anthropic API Key</label>
+      <input id="apiKeyInput" type="password" placeholder="sk-ant-api03-...">
+      <div class="btn-row">
+        <button class="btn" onclick="saveApiKey()">保存到服务器 (加密存储)</button>
+        <button class="btn" onclick="document.getElementById('apiKeyInput').type=document.getElementById('apiKeyInput').type==='password'?'text':'password'">显示/隐藏</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>用量统计</h3>
+      <button class="btn" onclick="loadUsage()">加载最近 30 天用量</button>
+      <div id="usageData" class="output" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- 管理面板 -->
+  <div id="admin" class="panel">
+    <div class="card">
+      <h3>管理后台</h3>
+      <label>Admin Token</label>
+      <input id="adminToken" type="password" placeholder="管理员 Token">
+      <div class="btn-row">
+        <button class="btn" onclick="adminUsers()">用户列表</button>
+        <button class="btn" onclick="adminStats()">系统统计</button>
+      </div>
+      <div id="adminResult" class="output" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = location.origin;
+let token = localStorage.getItem('bw_token') || '';
+let chatHistory = [];
+
+// ─── Tab 切换 ───
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ─── 工具函数 ───
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  return { status: res.status, data };
+}
+
+function setStatus(text, type) {
+  const el = document.getElementById('connStatus');
+  el.textContent = text;
+  el.className = 'status ' + type;
+}
+
+function show(id, content) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.textContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+}
+
+// ─── 认证 ───
+async function doRegister() {
+  const email = document.getElementById('regEmail').value;
+  const password = document.getElementById('regPwd').value;
+  const { status, data } = await api('POST', '/v1/register', { email, password });
+  if (status === 201) {
+    token = data.token;
+    localStorage.setItem('bw_token', token);
+    setStatus('已登录: ' + email, 'ok');
+    loadProfile();
+  } else {
+    setStatus(data.error, 'err');
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPwd').value;
+  const { status, data } = await api('POST', '/v1/login', { email, password });
+  if (status === 200) {
+    token = data.token;
+    localStorage.setItem('bw_token', token);
+    setStatus('已登录: ' + email, 'ok');
+    loadProfile();
+  } else {
+    setStatus(data.error, 'err');
+  }
+}
+
+async function loadProfile() {
+  if (!token) return;
+  const { status, data } = await api('GET', '/v1/me');
+  if (status === 200) {
+    show('userInfo', data);
+  }
+}
+
+// ─── 路由 ───
+async function doRoute() {
+  const text = document.getElementById('routeText').value;
+  if (!text) return;
+  const { status, data } = await api('POST', '/v1/route', { text });
+  if (status === 200) {
+    let result = `主路由: ${data.primary} (置信度: ${data.confidence})\n`;
+    result += `复杂度: ${data.complexity} | 延迟: ${data.latencyMs}ms\n\n`;
+    result += `候选列表:\n`;
+    for (const c of data.candidates || []) {
+      result += `  ${c.name} (${c.confidence}) [${(c.matchedKeywords||[]).join(', ')}]\n`;
+    }
+    if (data.firedRules?.length) result += `\n消歧规则: ${data.firedRules.join(', ')}`;
+    show('routeResult', result);
+  } else {
+    show('routeResult', data.error);
+  }
+}
+
+// ─── Chat (SSE 流式) ───
+async function doChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  chatHistory.push({ role: 'user', content: text });
+  appendChatMsg('user', text);
+
+  const model = document.getElementById('chatModel').value;
+  const msgDiv = appendChatMsg('assistant', '...');
+
+  try {
+    const res = await fetch(API + '/v1/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ model, messages: chatHistory }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      msgDiv.textContent = '[错误] ' + (err.error || err.detail?.error?.message || JSON.stringify(err));
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6);
+        if (payload === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(payload);
+          if (evt.type === 'content_block_delta' && evt.delta?.text) {
+            fullText += evt.delta.text;
+            msgDiv.textContent = fullText;
+          }
+        } catch {}
+      }
+    }
+
+    chatHistory.push({ role: 'assistant', content: fullText });
+  } catch (e) {
+    msgDiv.textContent = '[连接错误] ' + e.message;
+  }
+}
+
+function appendChatMsg(role, text) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+// ─── 设置 ───
+async function saveApiKey() {
+  const apiKey = document.getElementById('apiKeyInput').value;
+  const { status, data } = await api('PUT', '/v1/me/key', { apiKey });
+  setStatus(status === 200 ? 'API Key 已保存' : data.error, status === 200 ? 'ok' : 'err');
+}
+
+async function loadUsage() {
+  const { status, data } = await api('GET', '/v1/me/usage?days=30');
+  if (status === 200) show('usageData', data);
+  else show('usageData', data.error);
+}
+
+// ─── 管理 ───
+async function adminUsers() {
+  const t = document.getElementById('adminToken').value;
+  const res = await fetch(API + '/v1/admin/users', { headers: { 'Authorization': 'Admin ' + t } });
+  show('adminResult', await res.json());
+}
+
+async function adminStats() {
+  const t = document.getElementById('adminToken').value;
+  const res = await fetch(API + '/v1/admin/stats', { headers: { 'Authorization': 'Admin ' + t } });
+  show('adminResult', await res.json());
+}
+
+// ─── 初始化 ───
+(async () => {
+  try {
+    const res = await fetch(API + '/health');
+    const data = await res.json();
+    setStatus(`在线 | ${data.index?.skillCount || '?'} Skills | uptime ${data.uptime}s`, 'ok');
+    if (token) loadProfile();
+  } catch (e) {
+    setStatus('无法连接: ' + e.message, 'err');
+  }
+})();
+</script>
+</body>
+</html>

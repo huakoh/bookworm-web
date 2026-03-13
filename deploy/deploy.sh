@@ -30,8 +30,10 @@ case "${1:-help}" in
         pm2 startup
       fi
 
-      # 安装 build-essential (better-sqlite3 需要)
-      apt-get install -y build-essential python3
+      # 安装 Nginx (如未安装)
+      if ! command -v nginx &> /dev/null; then
+        apt-get install -y nginx
+      fi
 
       echo ">>> 安装完成，请上传代码"
 EOF
@@ -43,7 +45,7 @@ EOF
     # 打包 (排除 node_modules 和 data)
     tar czf /tmp/bookworm-web.tar.gz \
       --exclude='node_modules' \
-      --exclude='data/*.db*' \
+      --exclude='data' \
       --exclude='.env' \
       --exclude='.git' \
       -C "$(dirname "$(dirname "$0")")" .

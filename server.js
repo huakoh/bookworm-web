@@ -20,23 +20,32 @@ if (fs.existsSync(envPath)) {
 }
 
 const http = require('http');
-const { register, login, requireAuth } = require('./src/auth');
+const { register, login, requireAuth, verifyToken, refreshAccessToken } = require('./src/auth');
 const { encrypt, decrypt } = require('./src/crypto-utils');
 const { route, listSkills, getIndexMeta } = require('./src/router-engine');
 const { proxyChat } = require('./src/proxy');
 const { RateLimiter } = require('./src/rate-limiter');
-const { findUserById, updateApiKey, logUsage, getUserUsage, closeDb } = require('./src/db');
+const { findUserById, updateApiKey, logUsage, getUserUsage, listAllUsers, getSystemStats, closeDb } = require('./src/db');
+const { LoginGuard } = require('./src/login-guard');
+const { Metrics } = require('./src/metrics');
+const { handleUpgrade } = require('./src/ws-handler');
+const { detectProvider, getProviderConfig, sendLLMRequest, PROVIDERS } = require('./src/llm-router');
 
 // ─── 配置 ───
 const PORT = parseInt(process.env.PORT) || 3211;
 const MAX_BODY = parseInt(process.env.MAX_BODY_SIZE) || 524288; // 512KB
 const RPM = parseInt(process.env.RATE_LIMIT_RPM) || 30;
-
-// ❻ CORS 白名单 — 默认 * (可通过 CORS_ORIGIN 配置逗号分隔的域名)
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const METRICS_ENABLED = process.env.METRICS_ENABLED !== 'false';
 
 const limiter = new RateLimiter(RPM, 60_000);
+const loginGuard = new LoginGuard();
+const metrics = new Metrics();
 const startTime = Date.now();
+
+// ─── 静态文件目录 ───
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ─── 工具函数 ───
 
@@ -65,7 +74,6 @@ function readBody(req) {
   });
 }
 
-// ❸ 统一 JSON body 解析 — SyntaxError → 400
 async function parseJsonBody(req) {
   const raw = await readBody(req);
   try {
@@ -84,7 +92,7 @@ function corsHeaders() {
 }
 
 function json(res, code, data) {
-  if (res.headersSent) return; // 防止重复发送
+  if (res.headersSent) return;
   const body = JSON.stringify(data);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -101,19 +109,65 @@ function getClientIp(req) {
     || '0.0.0.0';
 }
 
-// 缓存日志级别，避免每次读取 env
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 const LOG_LEVEL = LOG_LEVELS[process.env.LOG_LEVEL || 'info'] || 1;
 
 function log(level, msg, meta = {}) {
   if ((LOG_LEVELS[level] || 0) < LOG_LEVEL) return;
-  const entry = {
-    ts: new Date().toISOString(),
-    level,
-    msg,
-    ...meta,
-  };
+  const entry = { ts: new Date().toISOString(), level, msg, ...meta };
   process.stdout.write(JSON.stringify(entry) + '\n');
+}
+
+// ─── #10 管理员认证 ───
+
+function requireAdmin(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Admin ')) {
+    throw { status: 401, message: '缺少管理员 Token' };
+  }
+  if (!ADMIN_TOKEN) {
+    throw { status: 503, message: '管理员功能未配置 (ADMIN_TOKEN)' };
+  }
+  if (auth.slice(6) !== ADMIN_TOKEN) {
+    throw { status: 403, message: '管理员 Token 无效' };
+  }
+}
+
+// ─── #3 静态文件服务 ───
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
+function serveStatic(req, res) {
+  let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'index.html' : req.url);
+  // 安全: 防止路径穿越
+  filePath = path.normalize(filePath);
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    json(res, 403, { error: '禁止访问' });
+    return true;
+  }
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return false; // 非静态文件，继续 API 路由
+  }
+  const ext = path.extname(filePath);
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+  const content = fs.readFileSync(filePath);
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': content.length,
+    'Cache-Control': 'public, max-age=3600',
+    ...corsHeaders(),
+  });
+  res.end(content);
+  return true;
 }
 
 // ─── 路由表 ───
@@ -122,42 +176,18 @@ const routes = {};
 
 // CORS 预检
 routes['OPTIONS:*'] = (req, res) => {
-  res.writeHead(204, {
-    ...corsHeaders(),
-    'Access-Control-Max-Age': '86400',
-  });
+  res.writeHead(204, { ...corsHeaders(), 'Access-Control-Max-Age': '86400' });
   res.end();
-};
-
-// 欢迎页
-routes['GET:/'] = (req, res) => {
-  json(res, 200, {
-    name: 'Bookworm Web Service',
-    version: '1.0.0',
-    mode: 'BYOK (Bring Your Own Key)',
-    endpoints: {
-      'POST /v1/register': '注册账户',
-      'POST /v1/login': '登录获取 Token',
-      'POST /v1/route': '智能路由分析 (核心)',
-      'POST /v1/chat': 'Claude API 透传 (BYOK)',
-      'POST /v1/chat/stream': 'Claude API 流式透传 (SSE)',
-      'GET  /v1/skills': '技能列表',
-      'GET  /v1/me': '用户信息',
-      'PUT  /v1/me/key': '更新 API Key',
-      'GET  /v1/me/usage': '用量统计',
-      'GET  /health': '健康检查',
-    },
-  });
 };
 
 // 健康检查
 routes['GET:/health'] = (req, res) => {
   let indexStatus = 'ok';
   let indexMeta = {};
-  try {
-    indexMeta = getIndexMeta();
-  } catch (e) {
-    indexStatus = 'error: ' + e.message;
+  try { indexMeta = getIndexMeta(); } catch (e) { indexStatus = 'error: ' + e.message; }
+
+  if (METRICS_ENABLED) {
+    metrics.setGauge('uptime_seconds', Math.floor((Date.now() - startTime) / 1000));
   }
 
   json(res, 200, {
@@ -172,19 +202,66 @@ routes['GET:/health'] = (req, res) => {
   });
 };
 
+// ─── #11 Prometheus 指标端点 ───
+
+routes['GET:/metrics'] = (req, res) => {
+  if (!METRICS_ENABLED) {
+    json(res, 404, { error: '指标功能未启用' });
+    return;
+  }
+  metrics.setGauge('uptime_seconds', Math.floor((Date.now() - startTime) / 1000));
+  const body = metrics.serialize();
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+  });
+  res.end(body);
+};
+
 // ─── 认证端点 ───
 
 routes['POST:/v1/register'] = async (req, res) => {
   const body = await parseJsonBody(req);
   const result = await register(body.email, body.password);
   log('info', '用户注册', { email: body.email, userId: result.id });
+  if (METRICS_ENABLED) metrics.incCounter('auth_events_total', { event: 'register' });
   json(res, 201, { ok: true, ...result });
 };
 
 routes['POST:/v1/login'] = async (req, res) => {
   const body = await parseJsonBody(req);
-  const result = await login(body.email, body.password);
-  log('info', '用户登录', { email: body.email });
+  const { email, password } = body;
+
+  // #6 暴力破解防护
+  const guardCheck = loginGuard.check(email || '');
+  if (guardCheck.locked) {
+    if (METRICS_ENABLED) metrics.incCounter('auth_events_total', { event: 'login_locked' });
+    throw {
+      status: 429,
+      message: `登录尝试过多，请 ${Math.ceil(guardCheck.retryAfterMs / 60000)} 分钟后重试`,
+    };
+  }
+
+  try {
+    const result = await login(email, password);
+    loginGuard.recordSuccess(email);
+    log('info', '用户登录', { email });
+    if (METRICS_ENABLED) metrics.incCounter('auth_events_total', { event: 'login_success' });
+    json(res, 200, { ok: true, ...result });
+  } catch (err) {
+    if (err.status === 401) {
+      loginGuard.recordFailure(email || '');
+      if (METRICS_ENABLED) metrics.incCounter('auth_events_total', { event: 'login_fail' });
+    }
+    throw err;
+  }
+};
+
+// ─── #9 Token 刷新 ───
+
+routes['POST:/v1/token/refresh'] = async (req, res) => {
+  const body = await parseJsonBody(req);
+  const result = refreshAccessToken(body.refreshToken);
   json(res, 200, { ok: true, ...result });
 };
 
@@ -207,8 +284,9 @@ routes['PUT:/v1/me/key'] = async (req, res) => {
   const { apiKey } = body;
 
   if (!apiKey) throw { status: 400, message: '缺少 apiKey 字段' };
-  if (!apiKey.startsWith('sk-ant-')) {
-    throw { status: 400, message: 'API Key 格式错误，应以 sk-ant- 开头' };
+  // 支持多 provider 的 API Key 格式
+  if (!apiKey.startsWith('sk-')) {
+    throw { status: 400, message: 'API Key 格式错误，应以 sk- 开头' };
   }
 
   const encrypted = encrypt(apiKey);
@@ -237,17 +315,14 @@ routes['POST:/v1/route'] = async (req, res) => {
   }
 
   const result = route(text);
-
-  // 记录用量
   logUsage(userId, '/v1/route', text.length, 0, '', result.latencyMs);
 
-  log('info', '路由分析', {
-    userId,
-    primary: result.primary,
-    confidence: result.confidence,
-    latencyMs: result.latencyMs,
-  });
+  if (METRICS_ENABLED) metrics.incCounter('route_queries_total', { primary: result.primary });
 
+  log('info', '路由分析', {
+    userId, primary: result.primary,
+    confidence: result.confidence, latencyMs: result.latencyMs,
+  });
   json(res, 200, { ok: true, ...result });
 };
 
@@ -259,96 +334,169 @@ routes['GET:/v1/skills'] = async (req, res) => {
   json(res, 200, { count: skills.length, skills });
 };
 
-// ─── Claude API 透传 (BYOK) ───
+// ─── #13 Provider 列表 ───
+
+routes['GET:/v1/providers'] = async (req, res) => {
+  requireAuth(req);
+  const providers = Object.entries(PROVIDERS).map(([name, config]) => ({
+    name,
+    models: config.modelPrefixes,
+    baseUrl: config.baseUrl,
+  }));
+  json(res, 200, { count: providers.length, providers });
+};
+
+// ─── Claude / 多 LLM API 透传 (BYOK) ───
+
+async function resolveApiKey(userId, body) {
+  // 优先用请求中传入的 Key (即时 BYOK)
+  if (body.apiKey || body.api_key) {
+    const key = body.apiKey || body.api_key;
+    if (!key.startsWith('sk-')) throw { status: 400, message: 'API Key 格式错误' };
+    return key;
+  }
+  // 否则用已存储的加密 Key
+  const user = findUserById(userId);
+  if (!user?.api_key_enc) {
+    throw { status: 400, message: '未配置 API Key，请先调用 PUT /v1/me/key 或在请求中传入 apiKey' };
+  }
+  return decrypt(user.api_key_enc);
+}
 
 routes['POST:/v1/chat'] = async (req, res) => {
   const userId = requireAuth(req);
   const body = await parseJsonBody(req);
-
-  // 获取用户 API Key
   const apiKey = await resolveApiKey(userId, body);
+  const model = body.model || 'claude-sonnet-4-5-20250514';
 
+  // #13 自动检测 provider
+  const providerName = detectProvider(model);
   const startMs = Date.now();
-  const result = await proxyChat({
-    apiKey,
-    model: body.model,
-    messages: body.messages,
-    maxTokens: body.max_tokens || body.maxTokens,
-    stream: false,
-    baseUrl: body.base_url || body.baseUrl,
-    systemPrompt: body.system,
-  }, res);
 
-  const latencyMs = Date.now() - startMs;
+  if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'false' });
 
-  // 记录用量 (从响应中提取 token 计数)
-  const usage = result.data?.usage || {};
-  logUsage(userId, '/v1/chat', usage.input_tokens || 0, usage.output_tokens || 0, body.model || '', latencyMs);
+  if (providerName === 'anthropic' && !body.base_url && !body.baseUrl) {
+    // Anthropic: 用原有 proxy (支持 SSRF 防护)
+    const result = await proxyChat({
+      apiKey, model,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.maxTokens,
+      stream: false,
+      baseUrl: body.base_url || body.baseUrl,
+      systemPrompt: body.system,
+    }, res);
 
-  log('info', 'Chat 完成', { userId, model: body.model, latencyMs });
+    const latencyMs = Date.now() - startMs;
+    const usage = result.data?.usage || {};
+    logUsage(userId, '/v1/chat', usage.input_tokens || 0, usage.output_tokens || 0, model, latencyMs);
+    log('info', 'Chat 完成', { userId, model, provider: 'anthropic', latencyMs });
 
-  // 包装上游错误，区分 Bookworm 错误和 Anthropic 错误
-  if (result.status >= 400) {
-    json(res, 502, {
-      error: '上游 API 返回错误',
-      upstream_status: result.status,
-      detail: result.data,
-    });
+    if (result.status >= 400) {
+      json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
+    } else {
+      json(res, result.status, result.data);
+    }
   } else {
-    json(res, result.status, result.data);
+    // 其他 provider: 用 llm-router
+    const config = getProviderConfig(providerName, body.base_url || body.baseUrl);
+    const reqBody = config.buildBody({
+      model,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.maxTokens,
+      stream: false,
+      systemPrompt: body.system,
+    });
+
+    const result = await sendLLMRequest(
+      { name: providerName, baseUrl: config.baseUrl },
+      apiKey, reqBody, res, false
+    );
+
+    const latencyMs = Date.now() - startMs;
+    const usage = config.parseUsage(result.data);
+    logUsage(userId, '/v1/chat', usage.input_tokens, usage.output_tokens, model, latencyMs);
+    log('info', 'Chat 完成', { userId, model, provider: providerName, latencyMs });
+
+    if (result.status >= 400) {
+      json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
+    } else {
+      json(res, result.status, result.data);
+    }
   }
 };
 
 routes['POST:/v1/chat/stream'] = async (req, res) => {
   const userId = requireAuth(req);
   const body = await parseJsonBody(req);
-
   const apiKey = await resolveApiKey(userId, body);
-
+  const model = body.model || 'claude-sonnet-4-5-20250514';
+  const providerName = detectProvider(model);
   const startMs = Date.now();
-  log('info', 'Chat 流式开始', { userId, model: body.model });
 
-  const result = await proxyChat({
-    apiKey,
-    model: body.model,
-    messages: body.messages,
-    maxTokens: body.max_tokens || body.maxTokens,
-    stream: true,
-    baseUrl: body.base_url || body.baseUrl,
-    systemPrompt: body.system,
-  }, res);
+  if (METRICS_ENABLED) metrics.incCounter('chat_requests_total', { model, stream: 'true' });
 
-  const latencyMs = Date.now() - startMs;
-  logUsage(userId, '/v1/chat/stream', 0, 0, body.model || '', latencyMs);
+  log('info', 'Chat 流式开始', { userId, model, provider: providerName });
 
-  // ❼ 如果上游返回错误（proxyChat 收集了 JSON 而非 SSE），需要发送 JSON 响应
-  if (result && !result.streamed && !res.headersSent) {
-    json(res, 502, {
-      error: '上游 API 返回错误',
-      upstream_status: result.status,
-      detail: result.data,
+  if (providerName === 'anthropic' && !body.base_url && !body.baseUrl) {
+    const result = await proxyChat({
+      apiKey, model,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.maxTokens,
+      stream: true,
+      baseUrl: body.base_url || body.baseUrl,
+      systemPrompt: body.system,
+    }, res);
+
+    const latencyMs = Date.now() - startMs;
+    logUsage(userId, '/v1/chat/stream', 0, 0, model, latencyMs);
+
+    if (result && !result.streamed && !res.headersSent) {
+      json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
+    }
+  } else {
+    const config = getProviderConfig(providerName, body.base_url || body.baseUrl);
+    const reqBody = config.buildBody({
+      model,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.maxTokens,
+      stream: true,
+      systemPrompt: body.system,
     });
+
+    const result = await sendLLMRequest(
+      { name: providerName, baseUrl: config.baseUrl },
+      apiKey, reqBody, res, true
+    );
+
+    const latencyMs = Date.now() - startMs;
+    logUsage(userId, '/v1/chat/stream', 0, 0, model, latencyMs);
+
+    if (result && !result.streamed && !res.headersSent) {
+      json(res, 502, { error: '上游 API 返回错误', upstream_status: result.status, detail: result.data });
+    }
   }
 };
 
-// ─── 辅助函数 ───
+// ─── #10 管理端点 ───
 
-async function resolveApiKey(userId, body) {
-  // 优先用请求中传入的 Key (即时 BYOK)
-  if (body.apiKey || body.api_key) {
-    const key = body.apiKey || body.api_key;
-    if (!key.startsWith('sk-ant-')) throw { status: 400, message: 'API Key 格式错误' };
-    return key;
-  }
+routes['GET:/v1/admin/users'] = async (req, res) => {
+  requireAdmin(req);
+  const users = listAllUsers();
+  json(res, 200, { count: users.length, users });
+};
 
-  // 否则用已存储的加密 Key
-  const user = findUserById(userId);
-  if (!user?.api_key_enc) {
-    throw { status: 400, message: '未配置 API Key，请先调用 PUT /v1/me/key 或在请求中传入 apiKey' };
-  }
-
-  return decrypt(user.api_key_enc);
-}
+routes['GET:/v1/admin/stats'] = async (req, res) => {
+  requireAdmin(req);
+  const stats = getSystemStats();
+  json(res, 200, {
+    ...stats,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    memory: {
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+      heap: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+    },
+  });
+};
 
 // ─── HTTP 服务器 ───
 
@@ -357,6 +505,7 @@ const server = http.createServer(async (req, res) => {
   const method = req.method.toUpperCase();
   const pathname = url.pathname;
   const clientIp = getClientIp(req);
+  const reqStart = Date.now();
 
   // CORS 预检
   if (method === 'OPTIONS') {
@@ -373,7 +522,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 路由匹配
+  // #3 静态文件优先 (GET 请求且非 /v1/ /health /metrics 路径)
+  if (method === 'GET' && !pathname.startsWith('/v1/') && pathname !== '/health' && pathname !== '/metrics') {
+    if (serveStatic(req, res)) return;
+  }
+
+  // API 路由匹配
   const routeKey = `${method}:${pathname}`;
   const handler = routes[routeKey];
 
@@ -385,18 +539,32 @@ const server = http.createServer(async (req, res) => {
   try {
     await handler(req, res);
   } catch (err) {
-    // 业务错误 (带 status 字段)
     if (err.status) {
       json(res, err.status, { error: err.message });
-      return;
+    } else {
+      log('error', '请求处理失败', { method, path: pathname, error: err.message });
+      json(res, 500, { error: '服务器内部错误' });
     }
-    // 系统错误 — 不暴露堆栈
-    log('error', '请求处理失败', {
-      method,
-      path: pathname,
-      error: err.message,
-    });
-    json(res, 500, { error: '服务器内部错误' });
+  } finally {
+    // #11 请求指标
+    if (METRICS_ENABLED) {
+      const latency = Date.now() - reqStart;
+      const status = res.statusCode || 500;
+      metrics.incCounter('http_requests_total', { method, path: pathname, status: String(status) });
+      metrics.observeHistogram('http_request_duration_ms', { method, path: pathname }, latency);
+    }
+  }
+});
+
+// ─── #12 WebSocket upgrade 处理 ───
+
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url, 'http://localhost');
+  if (url.pathname === '/ws') {
+    handleUpgrade(req, socket, head, verifyToken);
+  } else {
+    socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+    socket.destroy();
   }
 });
 
@@ -408,15 +576,17 @@ server.listen(PORT, () => {
   ║  Mode: BYOK (Bring Your Own Key)            ║
   ║  Port: ${String(PORT).padEnd(38)}║
   ║  CORS: ${CORS_ORIGIN.slice(0, 37).padEnd(38)}║
+  ║  Metrics: ${String(METRICS_ENABLED).padEnd(35)}║
+  ║  WebSocket: /ws                             ║
+  ║  Admin: ${ADMIN_TOKEN ? 'configured' : 'not configured    '}              ║
   ╚══════════════════════════════════════════════╝
   `);
 });
 
-// ─── ❽ 优雅关闭 + 强制超时 ───
+// ─── 优雅关闭 ───
 
 function gracefulShutdown(signal) {
   log('info', `收到 ${signal}，正在关闭...`);
-  // 强制退出兜底 (10s)
   const forceTimer = setTimeout(() => {
     log('warn', '优雅关闭超时，强制退出');
     process.exit(1);
@@ -426,6 +596,7 @@ function gracefulShutdown(signal) {
   server.close(() => {
     closeDb();
     limiter.destroy();
+    loginGuard.destroy();
     process.exit(0);
   });
 }
@@ -433,7 +604,6 @@ function gracefulShutdown(signal) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-// ❽ uncaughtException 后退出，让 PM2 重启
 process.on('uncaughtException', (err) => {
   log('error', '未捕获异常，进程即将退出', { error: err.message });
   process.exit(1);
